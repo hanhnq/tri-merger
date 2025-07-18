@@ -1,0 +1,106 @@
+import os
+import pandas as pd
+
+def create_question_master(data_dir, output_path):
+    """
+    dataディレクトリ内のすべてのExcelファイルから「質問対応表」を読み込み、
+    質問マスターファイルを作成する。
+    """
+    master_list = []
+    
+    for filename in os.listdir(data_dir):
+        if filename.endswith('.xlsx') and not filename.startswith('~'):
+            filepath = os.path.join(data_dir, filename)
+            try:
+                # ヘッダーなしで読み込み、手動で設定する
+                df_q = pd.read_excel(filepath, sheet_name='質問対応表', header=None)
+                
+                # 3行目(index=2)をヘッダーとして設定
+                df_q.columns = df_q.iloc[2]
+                # 4行目(index=3)以降をデータとして使用
+                df_q = df_q.iloc[3:].reset_index(drop=True)
+
+                # 必要な列だけを抽出
+                df_q = df_q[['番号', '内容']]
+                # 質問文が書かれている行のみを抽出（'番号'列が'Q-'で始まる行）
+                df_q = df_q[df_q['番号'].astype(str).str.startswith('Q-')].copy()
+                
+                df_q['ファイル名'] = filename
+                master_list.append(df_q)
+                print(f"'{filename}' から質問を読み込みました。")
+
+            except Exception as e:
+                print(f"Error processing {filename}: {e}")
+
+    if not master_list:
+        print("読み込むファイルが見つかりませんでした。")
+        return
+
+    master_df = pd.concat(master_list, ignore_index=True)
+    master_df.rename(columns={'番号': '質問番号', '内容': '質問文'}, inplace=True)
+
+    # 基準となるファイル（ファイル名でソートして最初のファイル）を特定
+    file_list = sorted([f for f in os.listdir(data_dir) if f.endswith('.xlsx') and not f.startswith('~')])
+    if not file_list:
+        print("基準となるファイルが見つかりません。")
+        return
+    base_file = file_list[0]
+    
+    # 基準ファイルの質問順序を保持（重複を除外）
+    base_order_df = master_df[master_df['ファイル名'] == base_file][['質問文']].drop_duplicates().copy()
+    
+    # 質問文をキーにしてピボット処理
+    pivot_df = master_df.pivot_table(
+        index='質問文',
+        columns='ファイル名',
+        values='質問番号',
+        aggfunc='first'
+    ).reset_index()
+
+    # 基準ファイルの質問リストを取得
+    base_questions_list = base_order_df['質問文'].tolist()
+
+    # pivot_dfを基準ファイルの質問とそれ以外に分割
+    df_base = pivot_df[pivot_df['質問文'].isin(base_questions_list)].copy()
+    df_other = pivot_df[~pivot_df['質問文'].isin(base_questions_list)].copy()
+
+    # 基準ファイルの質問をその順序通りにソート
+    df_base['質問文'] = pd.Categorical(df_base['質問文'], categories=base_questions_list, ordered=True)
+    df_base = df_base.sort_values('質問文')
+
+    # その他の質問を質問文でソート
+    df_other = df_other.sort_values('質問文')
+
+    # 2つのDataFrameを結合
+    final_df = pd.concat([df_base, df_other], ignore_index=True)
+
+    # 各質問が最初に登場したファイルを取得
+    master_df_sorted = master_df.sort_values('ファイル名')
+    first_appearance = master_df_sorted.groupby('質問文')['ファイル名'].first().reset_index()
+    first_appearance.rename(columns={'ファイル名': '初出ファイル'}, inplace=True)
+
+    # 初出ファイル情報をマージ
+    final_df = pd.merge(final_df, first_appearance, on='質問文', how='left')
+
+    # 列の順序を調整（初出ファイルを質問文の隣に）
+    cols = final_df.columns.tolist()
+    cols.insert(1, cols.pop(cols.index('初出ファイル')))
+    final_df = final_df[cols]
+
+    # すべてのファイルで質問番号が存在しない行（完全に空の行）を削除
+    file_columns = [f for f in final_df.columns if f not in ['質問文', '初出ファイル']]
+    cleaned_df = final_df.dropna(subset=file_columns, how='all')
+
+    # 結果をExcelファイルとして出力
+    cleaned_df.to_excel(output_path, index=False)
+    print(f"質問マスターが '{output_path}' に作成されました。")
+
+if __name__ == '__main__':
+    DATA_DIRECTORY = 'data'
+    OUTPUT_FILE = 'result/質問マスター.xlsx'
+    
+    # resultディレクトリがなければ作成
+    if not os.path.exists('result'):
+        os.makedirs('result')
+        
+    create_question_master(DATA_DIRECTORY, OUTPUT_FILE)
