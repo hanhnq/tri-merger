@@ -76,9 +76,9 @@ def aggregate_data(data_dir, question_master_path, client_settings_path, result_
         merged_df.sort_values(by='回答日時', inplace=True)
         logging.info(f"回答日時でソートしました。")
         
-        original_count = len(merged_df)
-        merged_df = merged_df.head(100)
-        logging.info(f"先頭100件を抽出しました。(元の件数: {original_count} -> 抽出後: {len(merged_df)})")
+        # original_count = len(merged_df)
+        # merged_df = merged_df.head(100)
+        # logging.info(f"先頭100件を抽出しました。(元の件数: {original_count} -> 抽出後: {len(merged_df)})")
 
     # 中間ファイルを出力
     intermediate_path = os.path.join(result_dir, '中間データ_全件結合済み.xlsx')
