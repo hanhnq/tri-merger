@@ -46,5 +46,18 @@ build/
 *.swo
 
 # Project specific
-result/~$*
+result/
+data/
 *.log
+
+# Environment variables
+.env
+.streamlit/secrets.toml
+
+# Streamlit
+.streamlit/secrets.toml
+streamlit.log
+
+# Temporary files
+*.tmp
+*.temp
