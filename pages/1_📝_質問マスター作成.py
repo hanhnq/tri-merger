@@ -133,4 +133,9 @@ with st.expander("ℹ️ 使い方"):
 # 次のステップへのナビゲーション
 st.markdown("---")
 st.markdown("### 🚀 次のステップ")
-st.info("質問マスターを作成したら、左のメニューから「2️⃣ ⚙️ 設定サンプル作成」を選択してください。")
+col1, col2 = st.columns([3, 1])
+with col1:
+    st.info("質問マスターを作成したら、次はクライアント設定を行います。")
+with col2:
+    if st.button("次へ: クライアント設定 →", type="primary", use_container_width=True):
+        st.switch_page("pages/2_⚙️_設定サンプル作成.py")
