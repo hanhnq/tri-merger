@@ -1,0 +1,26 @@
+[theme]
+# プライマリカラー
+primaryColor = "#FF6B6B"
+
+# 背景色
+backgroundColor = "#FFFFFF"
+
+# セカンダリ背景色
+secondaryBackgroundColor = "#F0F2F6"
+
+# テキストカラー
+textColor = "#262730"
+
+# フォント
+font = "sans serif"
+
+[server]
+# ファイルアップロードの最大サイズ（MB）
+maxUploadSize = 200
+
+# メッセージの最大サイズ（MB）
+maxMessageSize = 200
+
+[browser]
+# タブのタイトル
+gatherUsageStats = false
