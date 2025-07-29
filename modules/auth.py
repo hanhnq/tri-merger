@@ -1,13 +1,5 @@
 import streamlit as st
-import os
 from datetime import datetime, timedelta
-
-# Streamlit Cloudの場合はst.secrets、ローカルの場合は環境変数を使用
-try:
-    from dotenv import load_dotenv
-    load_dotenv()
-except ImportError:
-    pass
 
 def check_password():
     """
@@ -67,11 +59,8 @@ def verify_password(password):
     Returns:
         bool: パスワードが正しい場合True
     """
-    # Streamlit Cloudではst.secretsを使用
-    if hasattr(st, 'secrets') and 'APP_PASSWORD' in st.secrets:
-        correct_password = st.secrets["APP_PASSWORD"]
-    else:
-        correct_password = os.getenv("APP_PASSWORD", "tri-merger-2024")
+    # パスワードを直接指定
+    correct_password = "tri-merger-2024"
     return password == correct_password
 
 def check_session_timeout():
@@ -84,11 +73,8 @@ def check_session_timeout():
     if st.session_state.auth_time is None:
         return False
     
-    # Streamlit Cloudではst.secretsを使用
-    if hasattr(st, 'secrets') and 'SESSION_TIMEOUT' in st.secrets:
-        timeout_seconds = int(st.secrets["SESSION_TIMEOUT"])
-    else:
-        timeout_seconds = int(os.getenv("SESSION_TIMEOUT", "3600"))
+    # タイムアウト時間を直接指定（1時間）
+    timeout_seconds = 3600
     timeout_delta = timedelta(seconds=timeout_seconds)
     
     if datetime.now() - st.session_state.auth_time > timeout_delta:
