@@ -56,6 +56,7 @@ col1, col2, col3 = st.columns(3)
 
 with col1:
     st.markdown("### 1. アンケートデータファイル")
+    st.info("📌 ファイルサイズ制限: 各ファイル50MB以内")
     data_files = st.file_uploader(
         "Excelファイルを選択",
         type=['xlsx'],
@@ -85,6 +86,20 @@ with col3:
 # 集計実行ボタン
 if st.button("🚀 集計を実行", type="primary", disabled=not (data_files and question_master_file and client_settings_file)):
     try:
+        # ファイルサイズチェック
+        for file in data_files:
+            if file.size > 50 * 1024 * 1024:  # 50MB
+                st.error(f"❌ ファイル '{file.name}' が50MBを超えています。")
+                st.stop()
+        
+        if question_master_file.size > 50 * 1024 * 1024:
+            st.error("❌ 質問マスターファイルが50MBを超えています。")
+            st.stop()
+            
+        if client_settings_file.size > 50 * 1024 * 1024:
+            st.error("❌ クライアント設定ファイルが50MBを超えています。")
+            st.stop()
+        
         with st.spinner("データを処理中..."):
             # ファイルの読み込み
             question_master_df = pd.read_excel(question_master_file)
@@ -100,8 +115,13 @@ if st.button("🚀 集計を実行", type="primary", disabled=not (data_files an
             
         st.success("✅ 集計が完了しました！")
         
+    except PermissionError:
+        st.error("❌ ファイルアクセスエラー: ファイルが開かれている可能性があります。")
+    except pd.errors.EmptyDataError:
+        st.error("❌ 空のファイルが含まれています。")
     except Exception as e:
-        st.error(f"エラーが発生しました: {str(e)}")
+        st.error(f"❌ エラーが発生しました: {str(e)}")
+        st.error("ファイルが破損しているか、形式が正しくない可能性があります。")
 
 # ログ表示
 if st.session_state.logs:

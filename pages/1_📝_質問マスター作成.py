@@ -53,6 +53,7 @@ st.markdown("""
 
 # ファイルアップロード
 st.markdown("### アンケートファイルをアップロード")
+st.info("📌 ファイルサイズ制限: 各ファイル50MB以内")
 uploaded_files = st.file_uploader(
     "Excelファイルを選択（複数可）",
     type=['xlsx'],

@@ -16,10 +16,16 @@ font = "sans serif"
 
 [server]
 # ファイルアップロードの最大サイズ（MB）
-maxUploadSize = 200
+maxUploadSize = 50
 
 # メッセージの最大サイズ（MB）
-maxMessageSize = 200
+maxMessageSize = 50
+
+# Enable XSRF protection
+enableXsrfProtection = false
+
+# Enable CORS
+enableCORS = false
 
 [browser]
 # タブのタイトル
