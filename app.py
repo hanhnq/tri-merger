@@ -6,35 +6,12 @@ st.set_page_config(
     page_title="アンケート集計システム",
     page_icon="📊",
     layout="wide",
-    initial_sidebar_state="collapsed"  # ログイン前は閉じた状態
+    initial_sidebar_state="expanded"  # 常に展開状態
 )
 
 # 認証チェック
 if not check_password():
-    # ログイン前はサイドバーを非表示
-    st.markdown(
-        """
-        <style>
-            [data-testid="stSidebar"] {
-                display: none;
-            }
-        </style>
-        """,
-        unsafe_allow_html=True
-    )
     st.stop()
-
-# 認証後はサイドバーを表示
-st.markdown(
-    """
-    <style>
-        [data-testid="stSidebar"] {
-            display: block;
-        }
-    </style>
-    """,
-    unsafe_allow_html=True
-)
 
 # メインページのレイアウト
 st.title("📊 アンケート集計システム")

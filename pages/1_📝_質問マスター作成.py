@@ -6,30 +6,7 @@ from modules.question_master import create_question_master
 
 # 認証チェック
 if not check_password():
-    # ログイン前はサイドバーを非表示
-    st.markdown(
-        """
-        <style>
-            [data-testid="stSidebar"] {
-                display: none;
-            }
-        </style>
-        """,
-        unsafe_allow_html=True
-    )
     st.stop()
-
-# 認証後はサイドバーを表示
-st.markdown(
-    """
-    <style>
-        [data-testid="stSidebar"] {
-            display: block;
-        }
-    </style>
-    """,
-    unsafe_allow_html=True
-)
 
 st.title("📝 ステップ1: 質問マスター作成")
 st.markdown("---")

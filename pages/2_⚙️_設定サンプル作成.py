@@ -5,30 +5,7 @@ from modules.auth import check_password
 
 # 認証チェック
 if not check_password():
-    # ログイン前はサイドバーを非表示
-    st.markdown(
-        """
-        <style>
-            [data-testid="stSidebar"] {
-                display: none;
-            }
-        </style>
-        """,
-        unsafe_allow_html=True
-    )
     st.stop()
-
-# 認証後はサイドバーを表示
-st.markdown(
-    """
-    <style>
-        [data-testid="stSidebar"] {
-            display: block;
-        }
-    </style>
-    """,
-    unsafe_allow_html=True
-)
 
 st.title("⚙️ ステップ2: クライアント設定")
 st.markdown("---")
