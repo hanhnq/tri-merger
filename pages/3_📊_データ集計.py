@@ -203,9 +203,4 @@ with st.expander("ℹ️ 使い方"):
 # ナビゲーション
 st.markdown("---")
 st.markdown("### 🎯 作業完了")
-col1, col2 = st.columns([1, 3])
-with col1:
-    if st.button("← 前へ: クライアント設定", use_container_width=True):
-        st.switch_page("pages/2_⚙️_設定サンプル作成.py")
-with col2:
-    st.success("すべての集計が完了したら、各クライアントのExcelファイルをダウンロードしてください。")
+st.success("すべての集計が完了したら、各クライアントのExcelファイルをダウンロードしてください。")

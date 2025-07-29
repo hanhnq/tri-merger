@@ -73,8 +73,7 @@ with col1:
     
     **必要なもの**: アンケートExcelファイル（複数可）
     """)
-    if st.button("📝 質問マスター作成へ", use_container_width=True):
-        st.switch_page("pages/1_📝_質問マスター作成.py")
+    st.markdown("👈 左のメニューから選択")
 
 with col2:
     st.markdown("""
@@ -89,8 +88,7 @@ with col2:
     
     **必要なもの**: 質問マスター（参照用）
     """)
-    if st.button("⚙️ 設定サンプル作成へ", use_container_width=True):
-        st.switch_page("pages/2_⚙️_設定サンプル作成.py")
+    st.markdown("👈 左のメニューから選択")
 
 with col3:
     st.markdown("""
@@ -108,8 +106,7 @@ with col3:
     - 質問マスター
     - クライアント設定
     """)
-    if st.button("📊 データ集計へ", use_container_width=True):
-        st.switch_page("pages/3_📊_データ集計.py")
+    st.markdown("👈 左のメニューから選択")
 
 st.markdown("---")
 
