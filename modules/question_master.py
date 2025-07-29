@@ -1,5 +1,9 @@
 import pandas as pd
 import io
+import logging
+
+# ログ設定
+logging.basicConfig(level=logging.INFO)
 
 def create_question_master(uploaded_files):
     """
@@ -15,7 +19,36 @@ def create_question_master(uploaded_files):
     master_list = []
     
     for uploaded_file in uploaded_files:
-        filename = uploaded_file.name
+        # ファイル名の文字化け対策
+        original_filename = uploaded_file.name
+        filename = original_filename
+        
+        # デバッグ用ログ
+        logging.info(f"Original filename: {repr(original_filename)}")
+        logging.info(f"Filename bytes: {original_filename.encode('utf-8', errors='replace')}")
+        
+        # 文字化けの検出と修正
+        try:
+            # 一般的な文字化けパターンをチェック
+            if any(ord(c) > 127 and ord(c) < 256 for c in filename):
+                # Latin-1でエンコードされた可能性がある場合
+                try:
+                    filename = filename.encode('latin-1').decode('utf-8')
+                except:
+                    pass
+            
+            # それでも文字化けしている場合は、安全なファイル名を生成
+            if '�' in filename or any(ord(c) > 0xFFFF for c in filename):
+                import hashlib
+                # ファイル名のハッシュ値を使用
+                file_hash = hashlib.md5(uploaded_file.name.encode('utf-8', errors='ignore')).hexdigest()[:8]
+                filename = f"file_{file_hash}.xlsx"
+                logging.warning(f"Filename contains invalid characters. Using safe name: {filename}")
+        except Exception:
+            # エラーが発生した場合は、安全なデフォルト名を使用
+            import time
+            filename = f"file_{int(time.time())}.xlsx"
+        
         if filename.endswith('.xlsx') and not filename.startswith('~'):
             try:
                 # ヘッダーなしで読み込み、手動で設定する
@@ -31,7 +64,10 @@ def create_question_master(uploaded_files):
                 # 質問文が書かれている行のみを抽出（'番号'列が'Q-'で始まる行）
                 df_q = df_q[df_q['番号'].astype(str).str.startswith('Q-')].copy()
                 
+                # ファイル名を保存（文字化け対策済み）
                 df_q['ファイル名'] = filename
+                # 元のファイル名も保存（表示用）
+                df_q['元ファイル名'] = original_filename
                 master_list.append(df_q)
 
             except Exception as e:
