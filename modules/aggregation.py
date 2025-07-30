@@ -1,6 +1,10 @@
 import pandas as pd
 import io
 from datetime import datetime
+import logging
+
+# ログ設定
+logging.basicConfig(level=logging.INFO)
 
 def aggregate_data(data_files, question_master_df, client_settings_df):
     """
@@ -23,12 +27,53 @@ def aggregate_data(data_files, question_master_df, client_settings_df):
     logs.append("--- データ読み込みと変換処理を開始 ---")
     
     for uploaded_file in data_files:
-        filename = uploaded_file.name
+        # ファイル名の文字化け対策（question_master.pyと同じ処理）
+        original_filename = uploaded_file.name
+        filename = original_filename
+        
+        # デバッグ用ログ
+        logging.info(f"Original filename in aggregation: {repr(original_filename)}")
+        
+        # 文字化けの検出と修正
+        try:
+            # 一般的な文字化けパターンをチェック
+            if any(ord(c) > 127 and ord(c) < 256 for c in filename):
+                # Latin-1でエンコードされた可能性がある場合
+                try:
+                    filename = filename.encode('latin-1').decode('utf-8')
+                except:
+                    pass
+            
+            # それでも文字化けしている場合は、安全なファイル名を生成
+            if '�' in filename or any(ord(c) > 0xFFFF for c in filename):
+                import hashlib
+                # ファイル名のハッシュ値を使用
+                file_hash = hashlib.md5(uploaded_file.name.encode('utf-8', errors='ignore')).hexdigest()[:8]
+                filename = f"file_{file_hash}.xlsx"
+                logging.warning(f"Filename contains invalid characters in aggregation. Using safe name: {filename}")
+        except Exception:
+            # エラーが発生した場合は、安全なデフォルト名を使用
+            import time
+            filename = f"file_{int(time.time())}.xlsx"
+            
         if filename.endswith('.xlsx') and not filename.startswith('~'):
             logs.append(f"'{filename}' の処理を開始...")
             
-            file_mapping = question_master_df[['質問文', filename]].dropna()
-            q_to_text_map = dict(zip(file_mapping[filename], file_mapping['質問文']))
+            # question_master_dfの列から対応するファイル名の列を探す
+            # 文字化けしたファイル名と修正後のファイル名の両方をチェック
+            file_column = None
+            if filename in question_master_df.columns:
+                file_column = filename
+            elif original_filename in question_master_df.columns:
+                file_column = original_filename
+            else:
+                # 列名を確認してログ出力
+                logging.warning(f"File column not found for {filename} or {original_filename}")
+                logging.info(f"Available columns: {list(question_master_df.columns)}")
+                continue
+                
+            file_mapping = question_master_df[['質問文', file_column]].dropna()
+            q_to_text_map = dict(zip(file_mapping[file_column], file_mapping['質問文']))
             
             try:
                 df_data = pd.read_excel(uploaded_file, sheet_name='data')
@@ -95,17 +140,48 @@ def aggregate_data(data_files, question_master_df, client_settings_df):
             
         client_data = merged_df[cols_to_select]
         
-        # 基準ファイルを特定
-        file_list = sorted([f.name for f in data_files if f.name.endswith('.xlsx') and not f.name.startswith('~')])
+        # 基準ファイルを特定（文字化け対策済みのファイル名を使用）
+        file_list = []
+        for f in data_files:
+            if f.name.endswith('.xlsx') and not f.name.startswith('~'):
+                # 同じ文字化け対策処理を適用
+                fname = f.name
+                try:
+                    if any(ord(c) > 127 and ord(c) < 256 for c in fname):
+                        try:
+                            fname = fname.encode('latin-1').decode('utf-8')
+                        except:
+                            pass
+                    if '�' in fname or any(ord(c) > 0xFFFF for c in fname):
+                        import hashlib
+                        file_hash = hashlib.md5(f.name.encode('utf-8', errors='ignore')).hexdigest()[:8]
+                        fname = f"file_{file_hash}.xlsx"
+                except:
+                    import time
+                    fname = f"file_{int(time.time())}.xlsx"
+                file_list.append(fname)
+        
+        file_list = sorted(file_list)
         base_file = file_list[0] if file_list else None
         
         base_mapping_df = pd.DataFrame()
         text_to_q_map = {}
         if base_file:
             # 基準ファイルの質問マッピングを取得
-            base_mapping_df = question_master_df[question_master_df.columns.intersection(['質問文', base_file])].copy()
-            base_mapping_df = base_mapping_df.rename(columns={base_file: '質問番号'}).dropna()
-            text_to_q_map = dict(zip(base_mapping_df['質問文'], base_mapping_df['質問番号']))
+            # base_fileがquestion_master_dfの列に存在するかチェック
+            if base_file in question_master_df.columns:
+                base_mapping_df = question_master_df[question_master_df.columns.intersection(['質問文', base_file])].copy()
+                base_mapping_df = base_mapping_df.rename(columns={base_file: '質問番号'}).dropna()
+                text_to_q_map = dict(zip(base_mapping_df['質問文'], base_mapping_df['質問番号']))
+            else:
+                # 元のファイル名で試す
+                for f in data_files:
+                    if f.name.endswith('.xlsx') and not f.name.startswith('~'):
+                        if f.name in question_master_df.columns:
+                            base_mapping_df = question_master_df[question_master_df.columns.intersection(['質問文', f.name])].copy()
+                            base_mapping_df = base_mapping_df.rename(columns={f.name: '質問番号'}).dropna()
+                            text_to_q_map = dict(zip(base_mapping_df['質問文'], base_mapping_df['質問番号']))
+                            break
 
         # client_dataの列名を質問文から質問番号へ再変換（FA列も考慮）
         final_rename_map = {}
