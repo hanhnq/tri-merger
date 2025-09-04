@@ -1,0 +1,47 @@
+=== STDOUT ===
+============================= test session starts ==============================
+platform darwin -- Python 3.11.0, pytest-8.0.0, pluggy-1.6.0 -- /Users/user/.pyenv/versions/3.11.0/bin/python3.11
+cachedir: .pytest_cache
+metadata: {'Python': '3.11.0', 'Platform': 'macOS-15.5-arm64-arm-64bit', 'Packages': {'pytest': '8.0.0', 'pluggy': '1.6.0'}, 'Plugins': {'asyncio': '0.23.5', 'anyio': '4.9.0', 'html': '4.1.1', 'metadata': '3.1.1', 'mock': '3.14.1', 'base-url': '2.1.0'}, 'Base URL': ''}
+rootdir: /Users/user/develop/tri-merger-python
+configfile: pytest.ini
+plugins: asyncio-0.23.5, anyio-4.9.0, html-4.1.1, metadata-3.1.1, mock-3.14.1, base-url-2.1.0
+asyncio: mode=Mode.STRICT
+collecting ... collected 22 items
+
+tests/test_auth_simple.py::TestAuthSimple::test_verify_password_correct PASSED
+tests/test_auth_simple.py::TestAuthSimple::test_verify_password_incorrect PASSED
+tests/test_auth_simple.py::TestAuthSimple::test_session_timeout_logic PASSED
+tests/test_question_master.py::TestQuestionMaster::test_create_question_master_normal PASSED
+tests/test_question_master.py::TestQuestionMaster::test_question_number_mapping PASSED
+tests/test_question_master.py::TestQuestionMaster::test_empty_file_list PASSED
+tests/test_question_master.py::TestQuestionMaster::test_file_without_question_sheet PASSED
+tests/test_question_master.py::TestQuestionMaster::test_malformed_filename_handling PASSED
+tests/test_question_master.py::TestQuestionMaster::test_question_order_preservation PASSED
+tests/test_question_master.py::TestQuestionMaster::test_duplicate_question_handling PASSED
+tests/test_question_master.py::TestQuestionMaster::test_non_q_prefix_exclusion PASSED
+tests/test_aggregation.py::TestAggregation::test_aggregate_data_normal PASSED
+tests/test_aggregation.py::TestAggregation::test_client_data_filtering PASSED
+tests/test_aggregation.py::TestAggregation::test_question_text_to_number_conversion PASSED
+tests/test_aggregation.py::TestAggregation::test_fa_column_inclusion PASSED
+tests/test_aggregation.py::TestAggregation::test_date_sorting PASSED
+tests/test_aggregation.py::TestAggregation::test_multiple_file_merge PASSED
+tests/test_aggregation.py::TestAggregation::test_empty_data_files PASSED
+tests/test_aggregation.py::TestAggregation::test_missing_data_sheet PASSED
+tests/test_aggregation.py::TestAggregation::test_malformed_filename_handling PASSED
+tests/test_aggregation.py::TestAggregation::test_base_file_determination PASSED
+tests/test_aggregation.py::TestAggregation::test_client_without_matching_questions PASSED
+
+=============================== warnings summary ===============================
+tests/test_question_master.py::TestQuestionMaster::test_malformed_filename_handling
+tests/test_question_master.py::TestQuestionMaster::test_non_q_prefix_exclusion
+  /Users/user/develop/tri-merger-python/modules/question_master.py:114: FutureWarning: The behavior of DataFrame concatenation with empty or all-NA entries is deprecated. In a future version, this will no longer exclude empty or all-NA columns when determining the result dtypes. To retain the old behavior, exclude the relevant entries before the concat operation.
+    final_df = pd.concat([df_base, df_other], ignore_index=True)
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+- generated xml file: /Users/user/develop/tri-merger-python/test_results/junit_report.xml -
+- Generated html report: file:///Users/user/develop/tri-merger-python/test_results/html_report.html -
+======================== 22 passed, 2 warnings in 1.21s ========================
+
+
+=== STDERR ===
