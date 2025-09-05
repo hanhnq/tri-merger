@@ -28,9 +28,10 @@ def _get_cookie_manager():
         return None
     try:
         cm = EncryptedCookieManager(prefix="tri-merger", password=_COOKIE_SECRET)
-        # ready で初回レンダリングを待ちたいが、ここでは停止せず利用可能時のみ使う
+        # 初回アクセス時は Cookie コンポーネントの初期化完了まで待つ
         if hasattr(cm, "ready") and not cm.ready():
-            return None
+            # ここで停止して再実行されると ready() が True になり、以降読書き可能
+            st.stop()
         return cm
     except Exception:
         return None
