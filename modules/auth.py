@@ -1,6 +1,7 @@
 import os
 import json
 import secrets
+import logging
 import streamlit as st
 from datetime import datetime, timedelta
 
@@ -9,6 +10,12 @@ try:
     from streamlit_cookies_manager import EncryptedCookieManager  # type: ignore
 except Exception:  # ライブラリ未導入時も他機能を壊さない
     EncryptedCookieManager = None  # type: ignore
+
+# ロガー
+logger = logging.getLogger(__name__)
+if not logger.handlers:
+    # Streamlitがrootを設定するためhandlerは通常不要だが、未設定環境向けに軽く設定
+    logging.basicConfig(level=os.environ.get("AUTH_LOG_LEVEL", "INFO"))
 
 # クッキー設定
 _COOKIE_KEY = "tm_auth"
@@ -19,26 +26,25 @@ _COOKIE_SECRET = (
 )
 _COOKIE_EXPIRE_DAYS = 7
 
-def _get_cookie_manager():
-    """Streamlit 実行時のみ Cookie Manager を初期化。pytest 等では無効化。"""
-    if EncryptedCookieManager is None:
-        return None
-    # pytest 等（非 Streamlit 実行）ではクッキー機能を無効化
-    if os.environ.get("PYTEST_CURRENT_TEST"):
-        return None
+# モジュールレベルでCookieマネージャを生成（推奨パターン）
+if EncryptedCookieManager and not os.environ.get("PYTEST_CURRENT_TEST"):
     try:
-        cm = EncryptedCookieManager(prefix="tri-merger", password=_COOKIE_SECRET)
-        # 初回アクセス時は Cookie コンポーネントの初期化完了まで待つ
-        if hasattr(cm, "ready") and not cm.ready():
-            # ここで停止して再実行されると ready() が True になり、以降読書き可能
-            st.stop()
-        return cm
-    except Exception:
-        return None
+        COOKIES = EncryptedCookieManager(prefix="tri-merger", password=_COOKIE_SECRET)
+        logger.debug("CookieManager initialized (prefix=tri-merger)")
+    except Exception as e:
+        logger.warning("CookieManager init failed: %s", e)
+        COOKIES = None
+else:
+    COOKIES = None
+
+def _get_cookie_manager():
+    """Cookie Manager を返す（ない場合は None）。"""
+    return COOKIES
 
 def _write_auth_cookie(expire_days: int = _COOKIE_EXPIRE_DAYS):
     cm = _get_cookie_manager()
     if not cm:
+        logger.debug("_write_auth_cookie: CookieManager unavailable")
         return
     exp = datetime.now() + timedelta(days=expire_days)
     payload = {
@@ -50,27 +56,35 @@ def _write_auth_cookie(expire_days: int = _COOKIE_EXPIRE_DAYS):
     try:
         cm[_COOKIE_KEY] = json.dumps(payload, separators=(",", ":"))
         cm.save()
-    except Exception:
-        pass
+        logger.info("auth cookie written: exp=%s", exp.isoformat())
+    except Exception as e:
+        logger.warning("_write_auth_cookie failed: %s", e)
 
 def _read_auth_cookie():
     cm = _get_cookie_manager()
     if not cm:
+        logger.debug("_read_auth_cookie: CookieManager unavailable")
         return None
     try:
         raw = cm.get(_COOKIE_KEY) if hasattr(cm, "get") else cm[_COOKIE_KEY]
-    except Exception:
+    except Exception as e:
+        logger.warning("_read_auth_cookie read error: %s", e)
         raw = None
     if not raw:
+        logger.debug("_read_auth_cookie: no cookie found")
         return None
     try:
-        return json.loads(raw)
-    except Exception:
+        data = json.loads(raw)
+        logger.debug("_read_auth_cookie: loaded exp_ts=%s, auth=%s", data.get("exp"), data.get("auth"))
+        return data
+    except Exception as e:
+        logger.warning("_read_auth_cookie parse error: %s", e)
         return None
 
 def _clear_auth_cookie():
     cm = _get_cookie_manager()
     if not cm:
+        logger.debug("_clear_auth_cookie: CookieManager unavailable")
         return
     try:
         if hasattr(cm, "__delitem__"):
@@ -78,8 +92,9 @@ def _clear_auth_cookie():
         else:
             cm[_COOKIE_KEY] = ""
         cm.save()
-    except Exception:
-        pass
+        logger.info("auth cookie cleared")
+    except Exception as e:
+        logger.warning("_clear_auth_cookie failed: %s", e)
 
 def check_password():
     """
@@ -93,17 +108,27 @@ def check_password():
         st.session_state.authenticated = False
     if "auth_time" not in st.session_state:
         st.session_state.auth_time = None
+    logger.debug("check_password: init authenticated=%s auth_time=%s", st.session_state.authenticated, st.session_state.auth_time)
+
+    # Cookieコンポーネントの初期化完了を担保
+    cm = _get_cookie_manager()
+    if cm is not None and hasattr(cm, "ready") and not cm.ready():
+        logger.debug("CookieManager not ready yet -> st.stop()")
+        st.stop()
     
     # Cookie による自動ログイン（他タブ/ブラウザ再起動後の継続）
     if not st.session_state.authenticated:
         c = _read_auth_cookie()
         now_ts = int(datetime.now().timestamp())
-        if c and c.get("auth") and int(c.get("exp", 0)) > now_ts:
-            st.session_state.authenticated = True
-            st.session_state.auth_time = datetime.now()
-            # スライディング延長
-            _write_auth_cookie()
-            return True
+        if c:
+            valid = c.get("auth") and int(c.get("exp", 0)) > now_ts
+            logger.info("check_password: cookie found valid=%s", bool(valid))
+            if valid:
+                st.session_state.authenticated = True
+                st.session_state.auth_time = datetime.now()
+                # スライディング延長
+                _write_auth_cookie()
+                return True
 
     # 既に認証済みの場合
     if st.session_state.authenticated:
@@ -135,9 +160,11 @@ def check_password():
                     st.session_state.auth_time = datetime.now()
                     # クッキーにも保存（別タブ/再起動でも保持）
                     _write_auth_cookie()
+                    logger.info("login success: session established")
                     st.success("ログインに成功しました！")
                     st.rerun()
                 else:
+                    logger.info("login failure: wrong password")
                     st.error("パスワードが正しくありません。")
     
     return False
@@ -165,6 +192,7 @@ def check_session_timeout():
     """
     # auth_time が未設定または None の場合はタイムアウト扱い
     if st.session_state.get("auth_time") is None:
+        logger.debug("check_session_timeout: no auth_time -> timeout")
         return False
     
     # タイムアウト時間を直接指定（1週間）
@@ -173,11 +201,13 @@ def check_session_timeout():
     timeout_delta = timedelta(seconds=timeout_seconds)
     
     if datetime.now() - st.session_state.auth_time > timeout_delta:
+        logger.info("check_session_timeout: expired")
         return False
     
     # セッション時間を更新（スライディング延長）
     st.session_state.auth_time = datetime.now()
     _write_auth_cookie()
+    logger.debug("check_session_timeout: renewed session and cookie")
     return True
 
 def logout():
