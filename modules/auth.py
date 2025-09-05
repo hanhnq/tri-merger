@@ -59,9 +59,15 @@ _RUN_CM = None  # 型: Optional[EncryptedCookieManager]
 # CookieManager は毎回インスタンス化（前回のnot ready状態を引きずらない）
 def _get_cookie_manager():
     """Cookie Manager を返す（ない場合は None）。毎実行で生成し、ready判定は呼び出し側で行う。"""
-    if not EncryptedCookieManager or os.environ.get("PYTEST_CURRENT_TEST"):
-        logger.info("CookieManager disabled (pytest or import failure)")
+    if not EncryptedCookieManager:
+        logger.info("CookieManager disabled: import failure (streamlit-cookies-manager not installed)")
         return None
+    if os.environ.get("PYTEST_CURRENT_TEST"):
+        if os.environ.get("ALLOW_COOKIES_IN_TEST") == "1":
+            logger.info("CookieManager enabled during pytest (ALLOW_COOKIES_IN_TEST=1)")
+        else:
+            logger.info("CookieManager disabled: pytest detected (PYTEST_CURRENT_TEST set)")
+            return None
     try:
         cm = EncryptedCookieManager(prefix="tri-merger", password=_COOKIE_SECRET)
         logger.info("CookieManager initialized (prefix=tri-merger)")
