@@ -70,11 +70,13 @@ def check_session_timeout():
     Returns:
         bool: タイムアウトしていない場合True
     """
-    if st.session_state.auth_time is None:
+    # auth_time が未設定または None の場合はタイムアウト扱い
+    if st.session_state.get("auth_time") is None:
         return False
     
-    # タイムアウト時間を直接指定（1時間）
-    timeout_seconds = 3600
+    # タイムアウト時間を直接指定（1週間）
+    # 7日 * 24時間 * 60分 * 60秒 = 604800秒
+    timeout_seconds = 7 * 24 * 60 * 60
     timeout_delta = timedelta(seconds=timeout_seconds)
     
     if datetime.now() - st.session_state.auth_time > timeout_delta:

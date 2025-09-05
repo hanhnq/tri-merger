@@ -36,23 +36,23 @@ class TestAuth:
         assert check_session_timeout() == False
     
     def test_check_session_timeout_within_limit(self):
-        """認証時間が1時間以内の場合、タイムアウトしないことを確認"""
-        st.session_state.auth_time = datetime.now() - timedelta(minutes=30)
+        """認証時間が1週間以内の場合、タイムアウトしないことを確認"""
+        st.session_state.auth_time = datetime.now() - timedelta(days=3)
         assert check_session_timeout() == True
         # auth_timeが更新されることも確認
         assert st.session_state.auth_time > datetime.now() - timedelta(seconds=5)
     
     def test_check_session_timeout_exceeded(self):
-        """認証時間が1時間を超えた場合、タイムアウトすることを確認"""
-        st.session_state.auth_time = datetime.now() - timedelta(hours=2)
+        """認証時間が1週間を超えた場合、タイムアウトすることを確認"""
+        st.session_state.auth_time = datetime.now() - timedelta(days=8)
         assert check_session_timeout() == False
     
     def test_check_session_timeout_edge_case(self):
-        """認証時間がちょうど1時間の場合のエッジケース"""
-        st.session_state.auth_time = datetime.now() - timedelta(seconds=3601)  # 1時間+1秒
+        """認証時間がちょうど1週間の場合のエッジケース"""
+        st.session_state.auth_time = datetime.now() - timedelta(seconds=7*24*3600 + 1)  # 1週間+1秒
         assert check_session_timeout() == False
         
-        st.session_state.auth_time = datetime.now() - timedelta(seconds=3599)  # 1時間-1秒
+        st.session_state.auth_time = datetime.now() - timedelta(seconds=7*24*3600 - 1)  # 1週間-1秒
         assert check_session_timeout() == True
     
     def test_logout(self):
