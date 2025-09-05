@@ -48,7 +48,7 @@ def _get_cookie_manager():
 
 def _write_auth_cookie(expire_days: int = _COOKIE_EXPIRE_DAYS):
     cm = _get_cookie_manager()
-    if not cm:
+    if cm is None:
         logger.warning("_write_auth_cookie: CookieManager unavailable (skip)")
         return
     exp = datetime.now() + timedelta(days=expire_days)
@@ -67,7 +67,7 @@ def _write_auth_cookie(expire_days: int = _COOKIE_EXPIRE_DAYS):
 
 def _read_auth_cookie():
     cm = _get_cookie_manager()
-    if not cm:
+    if cm is None:
         logger.info("_read_auth_cookie: CookieManager unavailable")
         return None
     try:
@@ -88,7 +88,7 @@ def _read_auth_cookie():
 
 def _clear_auth_cookie():
     cm = _get_cookie_manager()
-    if not cm:
+    if cm is None:
         logger.info("_clear_auth_cookie: CookieManager unavailable")
         return
     try:
