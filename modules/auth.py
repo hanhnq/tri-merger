@@ -1,5 +1,84 @@
+import os
+import json
+import secrets
 import streamlit as st
 from datetime import datetime, timedelta
+
+try:
+    # クッキー管理（暗号化）
+    from streamlit_cookies_manager import EncryptedCookieManager  # type: ignore
+except Exception:  # ライブラリ未導入時も他機能を壊さない
+    EncryptedCookieManager = None  # type: ignore
+
+# クッキー設定
+_COOKIE_KEY = "tm_auth"
+_COOKIE_SECRET = (
+    os.environ.get("COOKIES_PASSWORD")
+    or (getattr(st, "secrets", {}) or {}).get("COOKIES_PASSWORD")
+    or "dev-cookie-secret"
+)
+_COOKIE_EXPIRE_DAYS = 7
+
+def _get_cookie_manager():
+    """Streamlit 実行時のみ Cookie Manager を初期化。pytest 等では無効化。"""
+    if EncryptedCookieManager is None:
+        return None
+    # pytest 等（非 Streamlit 実行）ではクッキー機能を無効化
+    if os.environ.get("PYTEST_CURRENT_TEST"):
+        return None
+    try:
+        cm = EncryptedCookieManager(prefix="tri-merger", password=_COOKIE_SECRET)
+        # ready で初回レンダリングを待ちたいが、ここでは停止せず利用可能時のみ使う
+        if hasattr(cm, "ready") and not cm.ready():
+            return None
+        return cm
+    except Exception:
+        return None
+
+def _write_auth_cookie(expire_days: int = _COOKIE_EXPIRE_DAYS):
+    cm = _get_cookie_manager()
+    if not cm:
+        return
+    exp = datetime.now() + timedelta(days=expire_days)
+    payload = {
+        "v": 1,
+        "auth": True,
+        "exp": int(exp.timestamp()),
+        "nonce": secrets.token_urlsafe(8),
+    }
+    try:
+        cm[_COOKIE_KEY] = json.dumps(payload, separators=(",", ":"))
+        cm.save()
+    except Exception:
+        pass
+
+def _read_auth_cookie():
+    cm = _get_cookie_manager()
+    if not cm:
+        return None
+    try:
+        raw = cm.get(_COOKIE_KEY) if hasattr(cm, "get") else cm[_COOKIE_KEY]
+    except Exception:
+        raw = None
+    if not raw:
+        return None
+    try:
+        return json.loads(raw)
+    except Exception:
+        return None
+
+def _clear_auth_cookie():
+    cm = _get_cookie_manager()
+    if not cm:
+        return
+    try:
+        if hasattr(cm, "__delitem__"):
+            del cm[_COOKIE_KEY]
+        else:
+            cm[_COOKIE_KEY] = ""
+        cm.save()
+    except Exception:
+        pass
 
 def check_password():
     """
@@ -14,6 +93,17 @@ def check_password():
     if "auth_time" not in st.session_state:
         st.session_state.auth_time = None
     
+    # Cookie による自動ログイン（他タブ/ブラウザ再起動後の継続）
+    if not st.session_state.authenticated:
+        c = _read_auth_cookie()
+        now_ts = int(datetime.now().timestamp())
+        if c and c.get("auth") and int(c.get("exp", 0)) > now_ts:
+            st.session_state.authenticated = True
+            st.session_state.auth_time = datetime.now()
+            # スライディング延長
+            _write_auth_cookie()
+            return True
+
     # 既に認証済みの場合
     if st.session_state.authenticated:
         # タイムアウトチェック
@@ -42,6 +132,8 @@ def check_password():
                 if verify_password(password):
                     st.session_state.authenticated = True
                     st.session_state.auth_time = datetime.now()
+                    # クッキーにも保存（別タブ/再起動でも保持）
+                    _write_auth_cookie()
                     st.success("ログインに成功しました！")
                     st.rerun()
                 else:
@@ -82,8 +174,9 @@ def check_session_timeout():
     if datetime.now() - st.session_state.auth_time > timeout_delta:
         return False
     
-    # セッション時間を更新
+    # セッション時間を更新（スライディング延長）
     st.session_state.auth_time = datetime.now()
+    _write_auth_cookie()
     return True
 
 def logout():
@@ -92,4 +185,5 @@ def logout():
     """
     st.session_state.authenticated = False
     st.session_state.auth_time = None
+    _clear_auth_cookie()
     st.rerun()
