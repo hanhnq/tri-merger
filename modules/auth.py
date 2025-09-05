@@ -5,6 +5,11 @@ import logging
 import streamlit as st
 from datetime import datetime, timedelta
 
+# ロガー（最初に初期化して以降で利用）
+logger = logging.getLogger(__name__)
+if not logger.handlers:
+    logging.basicConfig(level=os.environ.get("AUTH_LOG_LEVEL", "INFO"))
+
 try:
     # クッキー管理（暗号化）
     from streamlit_cookies_manager import EncryptedCookieManager  # type: ignore
@@ -33,16 +38,12 @@ try:
         logger.warning("Patch for key_from_parameters failed: %s", _e)
 except Exception as e:  # ライブラリ未導入時も他機能を壊さない
     EncryptedCookieManager = None  # type: ignore
-    logging.getLogger(__name__).warning(
+    logger.warning(
         "EncryptedCookieManager not available (install streamlit-cookies-manager). reason=%s",
         e,
     )
 
-# ロガー
-logger = logging.getLogger(__name__)
-if not logger.handlers:
-    # Streamlitがrootを設定するためhandlerは通常不要だが、未設定環境向けに軽く設定
-    logging.basicConfig(level=os.environ.get("AUTH_LOG_LEVEL", "INFO"))
+# 以降、logger は上部で初期化済み
 
 # クッキー設定
 _COOKIE_KEY = "tm_auth"
