@@ -6,6 +6,18 @@ import logging
 # ログ設定
 logging.basicConfig(level=logging.INFO)
 
+# 全クライアントに共通で含まれる固定質問
+FIXED_QUESTIONS = [
+    'あなたの年代性別を教えてください。',
+    'あなたがお住まいの都道府県をお知らせください。',
+    '家族構成を教えてください。',
+    'あなたの年収を教えてください。',
+    '社会人経験は何年間ですか？',
+    '最終学歴を教えてください。',
+    'あなたのお住いの家賃を教えてください。',
+    'あなたに当てはまる選択肢をお知らせください。'
+]
+
 def aggregate_data(data_files, question_master_df, client_settings_df):
     """
     クライアント設定に基づき、アンケートデータを集計し、
@@ -119,10 +131,15 @@ def aggregate_data(data_files, question_master_df, client_settings_df):
     for client_name, group in client_settings_df.groupby('クライアント名'):
         logs.append(f"'{client_name}' の集計を開始します...")
         
+        # クライアント設定から質問を取得
         questions_to_aggregate = group['集計対象の質問文'].tolist()
         
+        # 固定質問を追加（重複を除外）
+        all_questions = list(dict.fromkeys(FIXED_QUESTIONS + questions_to_aggregate))
+        logs.append(f"'{client_name}' には固定質問を含む合計 {len(all_questions)} 個の質問を集計します。")
+        
         cols_to_select = ['NO']
-        for q in questions_to_aggregate:
+        for q in all_questions:
             if q in merged_df.columns:
                 cols_to_select.append(q)
             for col in merged_df.columns:
