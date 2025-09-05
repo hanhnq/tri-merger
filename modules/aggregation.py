@@ -183,13 +183,20 @@ def aggregate_data(data_files, question_master_df, client_settings_df):
         
         base_mapping_df = pd.DataFrame()
         text_to_q_map = {}
+        
+        # すべてのファイルから質問マッピングを収集（固定質問を含む全質問を確実にマッピング）
+        for file_col in question_master_df.columns:
+            if file_col != '質問文' and file_col.endswith('.xlsx'):
+                temp_mapping = question_master_df[['質問文', file_col]].dropna()
+                for _, row in temp_mapping.iterrows():
+                    if row['質問文'] not in text_to_q_map:
+                        text_to_q_map[row['質問文']] = row[file_col]
+        
+        # 基準ファイルの情報を取得（出力用）
         if base_file:
-            # 基準ファイルの質問マッピングを取得
-            # base_fileがquestion_master_dfの列に存在するかチェック
             if base_file in question_master_df.columns:
                 base_mapping_df = question_master_df[question_master_df.columns.intersection(['質問文', base_file])].copy()
                 base_mapping_df = base_mapping_df.rename(columns={base_file: '質問番号'}).dropna()
-                text_to_q_map = dict(zip(base_mapping_df['質問文'], base_mapping_df['質問番号']))
             else:
                 # 元のファイル名で試す
                 for f in data_files:
@@ -197,7 +204,6 @@ def aggregate_data(data_files, question_master_df, client_settings_df):
                         if f.name in question_master_df.columns:
                             base_mapping_df = question_master_df[question_master_df.columns.intersection(['質問文', f.name])].copy()
                             base_mapping_df = base_mapping_df.rename(columns={f.name: '質問番号'}).dropna()
-                            text_to_q_map = dict(zip(base_mapping_df['質問文'], base_mapping_df['質問番号']))
                             break
 
         # client_dataの列名を質問文から質問番号へ再変換（FA列も考慮）
