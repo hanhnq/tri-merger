@@ -122,7 +122,13 @@ def check_password():
     # Cookieコンポーネントの初期化完了を担保
     cm = _get_cookie_manager()
     if cm is not None and hasattr(cm, "ready") and not cm.ready():
-        logger.debug("CookieManager not ready yet -> st.stop()")
+        # フロント側にコンポーネントをマウントしてから停止（空白画面回避）
+        try:
+            st.write(cm)
+        except Exception:
+            pass
+        st.caption("🔐 認証情報を初期化しています… 少々お待ちください")
+        logger.debug("CookieManager not ready yet -> mount component and st.stop()")
         st.stop()
     
     # Cookie による自動ログイン（他タブ/ブラウザ再起動後の継続）
