@@ -30,24 +30,18 @@ _COOKIE_SECRET = (
 )
 _COOKIE_EXPIRE_DAYS = 7
 
-# CookieManager は遅延初期化（import時にStreamlit APIを触らない）
-COOKIES = None
-
+# CookieManager は毎回インスタンス化（前回のnot ready状態を引きずらない）
 def _get_cookie_manager():
-    """Cookie Manager を返す（ない場合は None）。初回呼び出し時に生成。"""
-    global COOKIES
-    if COOKIES is not None:
-        return COOKIES
+    """Cookie Manager を返す（ない場合は None）。毎実行で生成し、ready判定は呼び出し側で行う。"""
     if not EncryptedCookieManager or os.environ.get("PYTEST_CURRENT_TEST"):
         logger.info("CookieManager disabled (pytest or import failure)")
         return None
     try:
-        COOKIES = EncryptedCookieManager(prefix="tri-merger", password=_COOKIE_SECRET)
+        cm = EncryptedCookieManager(prefix="tri-merger", password=_COOKIE_SECRET)
         logger.info("CookieManager initialized (prefix=tri-merger)")
-        return COOKIES
+        return cm
     except Exception as e:
         logger.warning("CookieManager init failed: %s", e)
-        COOKIES = None
         return None
 
 def _write_auth_cookie(expire_days: int = _COOKIE_EXPIRE_DAYS):
@@ -122,13 +116,7 @@ def check_password():
     # Cookieコンポーネントの初期化完了を担保
     cm = _get_cookie_manager()
     if cm is not None and hasattr(cm, "ready") and not cm.ready():
-        # フロント側にコンポーネントをマウントしてから停止（空白画面回避）
-        try:
-            st.write(cm)
-        except Exception:
-            pass
-        st.caption("🔐 認証情報を初期化しています… 少々お待ちください")
-        logger.debug("CookieManager not ready yet -> mount component and st.stop()")
+        logger.debug("CookieManager not ready yet -> st.stop() to rerun")
         st.stop()
     
     # Cookie による自動ログイン（他タブ/ブラウザ再起動後の継続）
