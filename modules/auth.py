@@ -30,6 +30,9 @@ _COOKIE_SECRET = (
 )
 _COOKIE_EXPIRE_DAYS = 7
 
+# この実行サイクル内で使うCookieManager（重複生成回避用）
+_RUN_CM = None  # 型: Optional[EncryptedCookieManager]
+
 # CookieManager は毎回インスタンス化（前回のnot ready状態を引きずらない）
 def _get_cookie_manager():
     """Cookie Manager を返す（ない場合は None）。毎実行で生成し、ready判定は呼び出し側で行う。"""
@@ -45,7 +48,7 @@ def _get_cookie_manager():
         return None
 
 def _write_auth_cookie(expire_days: int = _COOKIE_EXPIRE_DAYS):
-    cm = _get_cookie_manager()
+    cm = _RUN_CM or _get_cookie_manager()
     if cm is None:
         logger.warning("_write_auth_cookie: CookieManager unavailable (skip)")
         return
@@ -64,7 +67,7 @@ def _write_auth_cookie(expire_days: int = _COOKIE_EXPIRE_DAYS):
         logger.warning("_write_auth_cookie failed: %s", e)
 
 def _read_auth_cookie():
-    cm = _get_cookie_manager()
+    cm = _RUN_CM or _get_cookie_manager()
     if cm is None:
         logger.info("_read_auth_cookie: CookieManager unavailable")
         return None
@@ -85,7 +88,7 @@ def _read_auth_cookie():
         return None
 
 def _clear_auth_cookie():
-    cm = _get_cookie_manager()
+    cm = _RUN_CM or _get_cookie_manager()
     if cm is None:
         logger.info("_clear_auth_cookie: CookieManager unavailable")
         return
@@ -114,7 +117,9 @@ def check_password():
     logger.debug("check_password: init authenticated=%s auth_time=%s", st.session_state.authenticated, st.session_state.auth_time)
 
     # Cookieコンポーネントの初期化完了を担保
-    cm = _get_cookie_manager()
+    global _RUN_CM
+    _RUN_CM = _get_cookie_manager()
+    cm = _RUN_CM
     if cm is not None and hasattr(cm, "ready") and not cm.ready():
         logger.debug("CookieManager not ready yet -> st.stop() to rerun")
         st.stop()
