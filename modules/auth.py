@@ -8,6 +8,29 @@ from datetime import datetime, timedelta
 try:
     # クッキー管理（暗号化）
     from streamlit_cookies_manager import EncryptedCookieManager  # type: ignore
+    # st.cache の非推奨警告を回避するため、ライブラリ内関数を安全にモンキーパッチ
+    try:
+        import base64
+        from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC  # type: ignore
+        from cryptography.hazmat.primitives import hashes  # type: ignore
+        import streamlit_cookies_manager.encrypted_cookie_manager as _encmod  # type: ignore
+
+        @_encmod.st.cache_data if hasattr(_encmod, 'st') else st.cache_data  # fallback
+        def _patched_key_from_parameters(salt: bytes, iterations: int, password: str):
+            kdf = PBKDF2HMAC(
+                algorithm=hashes.SHA256(),
+                length=32,
+                salt=salt,
+                iterations=iterations,
+            )
+            return base64.urlsafe_b64encode(kdf.derive(password.encode('utf-8')))
+
+        # 置換（元の関数は @st.cache でラップされているため警告が出る）
+        _encmod.key_from_parameters = _patched_key_from_parameters  # type: ignore
+        logger.info("Patched streamlit_cookies_manager.key_from_parameters -> st.cache_data")
+    except Exception as _e:
+        # パッチ失敗時はそのまま（警告は出るが機能は維持）
+        logger.warning("Patch for key_from_parameters failed: %s", _e)
 except Exception as e:  # ライブラリ未導入時も他機能を壊さない
     EncryptedCookieManager = None  # type: ignore
     logging.getLogger(__name__).warning(
