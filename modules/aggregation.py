@@ -6,6 +6,18 @@ import logging
 # ログ設定
 logging.basicConfig(level=logging.INFO)
 
+# 全クライアントに共通で含まれる固定質問
+FIXED_QUESTIONS = [
+    'あなたの年代性別を教えてください。',
+    'あなたがお住まいの都道府県をお知らせください。',
+    '家族構成を教えてください。',
+    'あなたの年収を教えてください。',
+    '社会人経験は何年間ですか？',
+    '最終学歴を教えてください。',
+    'あなたのお住いの家賃を教えてください。',
+    'あなたに当てはまる選択肢をお知らせください。'
+]
+
 def aggregate_data(data_files, question_master_df, client_settings_df):
     """
     クライアント設定に基づき、アンケートデータを集計し、
@@ -119,10 +131,15 @@ def aggregate_data(data_files, question_master_df, client_settings_df):
     for client_name, group in client_settings_df.groupby('クライアント名'):
         logs.append(f"'{client_name}' の集計を開始します...")
         
+        # クライアント設定から質問を取得
         questions_to_aggregate = group['集計対象の質問文'].tolist()
         
+        # 固定質問を追加（重複を除外）
+        all_questions = list(dict.fromkeys(FIXED_QUESTIONS + questions_to_aggregate))
+        logs.append(f"'{client_name}' には固定質問を含む合計 {len(all_questions)} 個の質問を集計します。")
+        
         cols_to_select = ['NO']
-        for q in questions_to_aggregate:
+        for q in all_questions:
             if q in merged_df.columns:
                 cols_to_select.append(q)
             for col in merged_df.columns:
@@ -166,13 +183,20 @@ def aggregate_data(data_files, question_master_df, client_settings_df):
         
         base_mapping_df = pd.DataFrame()
         text_to_q_map = {}
+        
+        # すべてのファイルから質問マッピングを収集（固定質問を含む全質問を確実にマッピング）
+        for file_col in question_master_df.columns:
+            if file_col != '質問文' and file_col.endswith('.xlsx'):
+                temp_mapping = question_master_df[['質問文', file_col]].dropna()
+                for _, row in temp_mapping.iterrows():
+                    if row['質問文'] not in text_to_q_map:
+                        text_to_q_map[row['質問文']] = row[file_col]
+        
+        # 基準ファイルの情報を取得（出力用）
         if base_file:
-            # 基準ファイルの質問マッピングを取得
-            # base_fileがquestion_master_dfの列に存在するかチェック
             if base_file in question_master_df.columns:
                 base_mapping_df = question_master_df[question_master_df.columns.intersection(['質問文', base_file])].copy()
                 base_mapping_df = base_mapping_df.rename(columns={base_file: '質問番号'}).dropna()
-                text_to_q_map = dict(zip(base_mapping_df['質問文'], base_mapping_df['質問番号']))
             else:
                 # 元のファイル名で試す
                 for f in data_files:
@@ -180,7 +204,6 @@ def aggregate_data(data_files, question_master_df, client_settings_df):
                         if f.name in question_master_df.columns:
                             base_mapping_df = question_master_df[question_master_df.columns.intersection(['質問文', f.name])].copy()
                             base_mapping_df = base_mapping_df.rename(columns={f.name: '質問番号'}).dropna()
-                            text_to_q_map = dict(zip(base_mapping_df['質問文'], base_mapping_df['質問番号']))
                             break
 
         # client_dataの列名を質問文から質問番号へ再変換（FA列も考慮）
