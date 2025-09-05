@@ -8,8 +8,12 @@ from datetime import datetime, timedelta
 try:
     # クッキー管理（暗号化）
     from streamlit_cookies_manager import EncryptedCookieManager  # type: ignore
-except Exception:  # ライブラリ未導入時も他機能を壊さない
+except Exception as e:  # ライブラリ未導入時も他機能を壊さない
     EncryptedCookieManager = None  # type: ignore
+    logging.getLogger(__name__).warning(
+        "EncryptedCookieManager not available (install streamlit-cookies-manager). reason=%s",
+        e,
+    )
 
 # ロガー
 logger = logging.getLogger(__name__)
@@ -30,12 +34,13 @@ _COOKIE_EXPIRE_DAYS = 7
 if EncryptedCookieManager and not os.environ.get("PYTEST_CURRENT_TEST"):
     try:
         COOKIES = EncryptedCookieManager(prefix="tri-merger", password=_COOKIE_SECRET)
-        logger.debug("CookieManager initialized (prefix=tri-merger)")
+        logger.info("CookieManager initialized (prefix=tri-merger)")
     except Exception as e:
         logger.warning("CookieManager init failed: %s", e)
         COOKIES = None
 else:
     COOKIES = None
+    logger.info("CookieManager disabled (pytest or import failure)")
 
 def _get_cookie_manager():
     """Cookie Manager を返す（ない場合は None）。"""
@@ -44,7 +49,7 @@ def _get_cookie_manager():
 def _write_auth_cookie(expire_days: int = _COOKIE_EXPIRE_DAYS):
     cm = _get_cookie_manager()
     if not cm:
-        logger.debug("_write_auth_cookie: CookieManager unavailable")
+        logger.warning("_write_auth_cookie: CookieManager unavailable (skip)")
         return
     exp = datetime.now() + timedelta(days=expire_days)
     payload = {
@@ -63,7 +68,7 @@ def _write_auth_cookie(expire_days: int = _COOKIE_EXPIRE_DAYS):
 def _read_auth_cookie():
     cm = _get_cookie_manager()
     if not cm:
-        logger.debug("_read_auth_cookie: CookieManager unavailable")
+        logger.info("_read_auth_cookie: CookieManager unavailable")
         return None
     try:
         raw = cm.get(_COOKIE_KEY) if hasattr(cm, "get") else cm[_COOKIE_KEY]
@@ -84,7 +89,7 @@ def _read_auth_cookie():
 def _clear_auth_cookie():
     cm = _get_cookie_manager()
     if not cm:
-        logger.debug("_clear_auth_cookie: CookieManager unavailable")
+        logger.info("_clear_auth_cookie: CookieManager unavailable")
         return
     try:
         if hasattr(cm, "__delitem__"):
