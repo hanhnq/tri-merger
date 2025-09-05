@@ -30,21 +30,25 @@ _COOKIE_SECRET = (
 )
 _COOKIE_EXPIRE_DAYS = 7
 
-# モジュールレベルでCookieマネージャを生成（推奨パターン）
-if EncryptedCookieManager and not os.environ.get("PYTEST_CURRENT_TEST"):
+# CookieManager は遅延初期化（import時にStreamlit APIを触らない）
+COOKIES = None
+
+def _get_cookie_manager():
+    """Cookie Manager を返す（ない場合は None）。初回呼び出し時に生成。"""
+    global COOKIES
+    if COOKIES is not None:
+        return COOKIES
+    if not EncryptedCookieManager or os.environ.get("PYTEST_CURRENT_TEST"):
+        logger.info("CookieManager disabled (pytest or import failure)")
+        return None
     try:
         COOKIES = EncryptedCookieManager(prefix="tri-merger", password=_COOKIE_SECRET)
         logger.info("CookieManager initialized (prefix=tri-merger)")
+        return COOKIES
     except Exception as e:
         logger.warning("CookieManager init failed: %s", e)
         COOKIES = None
-else:
-    COOKIES = None
-    logger.info("CookieManager disabled (pytest or import failure)")
-
-def _get_cookie_manager():
-    """Cookie Manager を返す（ない場合は None）。"""
-    return COOKIES
+        return None
 
 def _write_auth_cookie(expire_days: int = _COOKIE_EXPIRE_DAYS):
     cm = _get_cookie_manager()
