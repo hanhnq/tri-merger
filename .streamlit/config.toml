@@ -21,11 +21,13 @@ maxUploadSize = 50
 # メッセージの最大サイズ（MB）
 maxMessageSize = 50
 
-# Enable XSRF protection
-enableXsrfProtection = true
+# XSRF保護を無効化（Squadbase環境での動作のため）
+# 注意: 本番環境では true に設定してください
+enableXsrfProtection = false
 
-# Enable CORS
-enableCORS = true
+# CORS保護を無効化（Squadbase環境での動作のため）
+# 注意: 本番環境では true に設定してください
+enableCORS = false
 
 # ファイルウォッチャーのタイプ
 fileWatcherType = "none"
