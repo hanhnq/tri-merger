@@ -31,6 +31,14 @@ st.markdown("""
 # ファイルアップロード
 st.markdown("### アンケートファイルをアップロード")
 st.info("📌 ファイルサイズ制限: 各ファイル50MB以内")
+
+# デバッグ情報の表示（Squadbase環境での問題調査用）
+with st.expander("🔧 デバッグ情報"):
+    st.text(f"Streamlit Version: {st.__version__}")
+    st.text(f"Session State Keys: {list(st.session_state.keys())}")
+    import sys
+    st.text(f"Python Version: {sys.version}")
+
 uploaded_files = st.file_uploader(
     "Excelファイルを選択（複数可）",
     type=['xlsx'],

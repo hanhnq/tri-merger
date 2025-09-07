@@ -32,6 +32,12 @@ enableCORS = false
 # ファイルウォッチャーのタイプ
 fileWatcherType = "none"
 
+# WebSocketの設定を追加
+enableWebsocketCompression = false
+
+# ヘッダーサイズの制限を増やす（デフォルト: 8192）
+maxUploadSizeMb = 50
+
 [browser]
 # タブのタイトル
 gatherUsageStats = false
