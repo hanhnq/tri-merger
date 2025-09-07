@@ -16,10 +16,10 @@ font = "sans serif"
 
 [server]
 # ファイルアップロードの最大サイズ（MB）
-maxUploadSize = 200
+maxUploadSize = 50
 
 # メッセージの最大サイズ（MB）
-maxMessageSize = 200
+maxMessageSize = 50
 
 # XSRF保護を無効化（Squadbase環境での動作のため）
 # 注意: 本番環境では true に設定してください
@@ -35,9 +35,7 @@ fileWatcherType = "none"
 # WebSocketの設定を追加
 enableWebsocketCompression = false
 
-# ベースパス（リバースプロキシ配下での衝突回避）
-# デプロイ後は https://<domain>/tri-merger にアクセスしてください
-baseUrlPath = "tri-merger"
+
 
 [browser]
 # タブのタイトル
