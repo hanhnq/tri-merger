@@ -1,5 +1,5 @@
 import streamlit as st
-from modules.auth import check_password, logout
+# from modules.auth import check_password, logout  # 一時的にコメントアウト
 
 # ページ設定
 st.set_page_config(
@@ -9,9 +9,9 @@ st.set_page_config(
     initial_sidebar_state="expanded"  # 常に展開状態
 )
 
-# 認証チェック
-if not check_password():
-    st.stop()
+# 認証チェック（一時的にコメントアウト - ファイルアップロード問題の調査のため）
+# if not check_password():
+#     st.stop()
 
 # メインページのレイアウト
 st.title("📊 アンケート集計システム")
@@ -23,9 +23,9 @@ with st.sidebar:
     st.markdown("左側のメニューから機能を選択してください")
     st.markdown("---")
     
-    # ログアウトボタン
-    if st.button("🚪 ログアウト", use_container_width=True):
-        logout()
+    # ログアウトボタン（一時的にコメントアウト）
+    # if st.button("🚪 ログアウト", use_container_width=True):
+    #     logout()
 
 # メインコンテンツ
 st.markdown("""

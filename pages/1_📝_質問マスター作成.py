@@ -1,12 +1,12 @@
 import streamlit as st
 import pandas as pd
 import io
-from modules.auth import check_password
+# from modules.auth import check_password  # 一時的にコメントアウト
 from modules.question_master import create_question_master
 
-# 認証チェック
-if not check_password():
-    st.stop()
+# 認証チェック（一時的にコメントアウト - ファイルアップロード問題の調査のため）
+# if not check_password():
+#     st.stop()
 
 st.title("📝 ステップ1: 質問マスター作成")
 st.markdown("---")
