@@ -22,10 +22,13 @@ maxUploadSize = 50
 maxMessageSize = 50
 
 # Enable XSRF protection
-enableXsrfProtection = false
+enableXsrfProtection = true
 
 # Enable CORS
-enableCORS = false
+enableCORS = true
+
+# ファイルウォッチャーのタイプ
+fileWatcherType = "none"
 
 [browser]
 # タブのタイトル

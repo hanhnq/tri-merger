@@ -33,6 +33,11 @@ def aggregate_data(data_files, question_master_df, client_settings_df):
         pandas.DataFrame: 中間データ（全結合データ）
         list: ログメッセージのリスト
     """
+    # ファイルが空の場合のエラーチェック
+    if not data_files:
+        raise ValueError("データファイルがアップロードされていません。少なくとも1つのExcelファイルを選択してください。")
+    
+    logging.info(f"Received {len(data_files)} data files for aggregation")
     logs = []
     all_data_list = []
     

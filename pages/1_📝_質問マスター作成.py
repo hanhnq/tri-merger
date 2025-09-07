@@ -38,9 +38,21 @@ uploaded_files = st.file_uploader(
     help="質問対応表シートを含むアンケートファイルを選択してください"
 )
 
+# アップロードされたファイルの情報を表示
+if uploaded_files:
+    st.success(f"✅ {len(uploaded_files)}個のファイルがアップロードされました")
+    with st.expander("アップロードファイル詳細"):
+        for i, file in enumerate(uploaded_files):
+            st.text(f"{i+1}. {file.name} - {file.size:,} bytes")
+
 # 作成ボタン
 if st.button("📋 質問マスターを作成", type="primary", disabled=not uploaded_files):
     try:
+        # デバッグ情報を表示
+        st.info(f"📂 {len(uploaded_files)}個のファイルを処理中...")
+        for i, file in enumerate(uploaded_files):
+            st.text(f"  - ファイル{i+1}: {file.name} ({file.size:,} bytes)")
+        
         with st.spinner("質問マスターを作成中..."):
             # 質問マスター作成
             master_df = create_question_master(uploaded_files)
@@ -50,8 +62,14 @@ if st.button("📋 質問マスターを作成", type="primary", disabled=not up
             
         st.success("✅ 質問マスターの作成が完了しました！")
         
+    except ValueError as e:
+        st.error(f"⚠️ 入力エラー: {str(e)}")
     except Exception as e:
-        st.error(f"エラーが発生しました: {str(e)}")
+        st.error(f"❌ エラーが発生しました: {str(e)}")
+        st.error(f"エラータイプ: {type(e).__name__}")
+        import traceback
+        st.text("詳細なエラー情報:")
+        st.code(traceback.format_exc())
 
 # 結果表示
 if 'question_master' in st.session_state:

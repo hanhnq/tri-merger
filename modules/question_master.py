@@ -16,6 +16,11 @@ def create_question_master(uploaded_files):
     Returns:
         pandas.DataFrame: 質問マスターデータフレーム
     """
+    # ファイルが空の場合のエラーチェック
+    if not uploaded_files:
+        raise ValueError("ファイルがアップロードされていません。少なくとも1つのExcelファイルを選択してください。")
+    
+    logging.info(f"Received {len(uploaded_files)} files for processing")
     master_list = []
     
     for uploaded_file in uploaded_files:
