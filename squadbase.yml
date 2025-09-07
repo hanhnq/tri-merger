@@ -5,8 +5,3 @@ build:
   runtime: python3.12
   entrypoint: app.py
   package_manager: pip
-  env:
-    # Squadbase環境でのファイルアップロード問題を解決するための設定
-    # 注意: セキュリティ設定を無効化しているため、本番環境では使用しないでください
-    STREAMLIT_SERVER_ENABLE_XSRF_PROTECTION: "false"
-    STREAMLIT_SERVER_ENABLE_CORS: "false"
