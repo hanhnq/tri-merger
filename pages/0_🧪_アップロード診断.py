@@ -1,16 +1,22 @@
 import streamlit as st
 import sys
 
-st.set_page_config(page_title="🧪 アップロード診断", page_icon="🧪", layout="wide")
-
 st.title("🧪 アップロード診断")
 st.info("Squadbase配下でのファイルアップロード挙動を切り分けます。")
 
 with st.expander("🔧 環境情報"):
+    try:
+        base_url_path = st.get_option("server.baseUrlPath")
+    except Exception:
+        base_url_path = None
     st.write({
         "python": sys.version,
         "streamlit": st.__version__,
-        "baseUrlPath": st.runtime.get_instance().server.base_url_path if hasattr(st, "runtime") else "N/A",
+        "baseUrlPath": base_url_path or "(未設定)",
+        "enableCORS": st.get_option("server.enableCORS"),
+        "enableXsrfProtection": st.get_option("server.enableXsrfProtection"),
+        "maxUploadSize": st.get_option("server.maxUploadSize"),
+        "maxMessageSize": st.get_option("server.maxMessageSize"),
         "session_state_keys": list(st.session_state.keys()),
     })
 
@@ -37,4 +43,3 @@ if excel is not None:
     st.success(f"受信: {excel.name} ({excel.size:,} bytes)")
 
 st.caption("注: このページは診断専用で、受信ファイルは保存しません。")
-
