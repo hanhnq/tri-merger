@@ -33,6 +33,19 @@ def aggregate_data(data_files, question_master_df, client_settings_df):
         pandas.DataFrame: 中間データ（全結合データ）
         list: ログメッセージのリスト
     """
+    # Debug print to console and file
+    debug_msg = f"\n=== AGGREGATE_DATA CALLED ===\n"
+    debug_msg += f"Number of data_files received: {len(data_files)}\n"
+    for i, f in enumerate(data_files):
+        debug_msg += f"  File {i+1}: {f.name} (size: {f.size} bytes)\n"
+    debug_msg += "=" * 30 + "\n"
+    
+    print(debug_msg)
+    
+    # Also write to file for debugging
+    with open(r"D:\python\tri-merger\debug_log.txt", "w", encoding="utf-8") as f:
+        f.write(debug_msg)
+    
     # ファイルが空の場合のエラーチェック
     if not data_files:
         raise ValueError("データファイルがアップロードされていません。少なくとも1つのExcelファイルを選択してください。")
@@ -42,6 +55,22 @@ def aggregate_data(data_files, question_master_df, client_settings_df):
     all_data_list = []
     
     logs.append("--- データ読み込みと変換処理を開始 ---")
+    logs.append(f"アップロードされたファイル数: {len(data_files)}")
+    for i, f in enumerate(data_files):
+        logs.append(f"  {i+1}. {f.name} (サイズ: {f.size} bytes)")
+    
+    # 全ファイルから統合マッピングを作成（90個の質問すべてをカバー）
+    global_q_to_text_map = {}
+    for col in question_master_df.columns:
+        if col != '質問文' and col != '初出ファイル' and col.endswith('.xlsx'):
+            temp_mapping = question_master_df[['質問文', col]].dropna()
+            for _, row in temp_mapping.iterrows():
+                # まだマッピングされていない質問のみ追加
+                if row[col] not in global_q_to_text_map:
+                    global_q_to_text_map[row[col]] = row['質問文']
+    
+    logs.append(f"統合マッピングを作成: {len(global_q_to_text_map)}個の質問コードをテキストにマッピング")
+    logs.append(f"question_masterから検出された総質問数: {len(question_master_df)}個")
     
     for uploaded_file in data_files:
         # ファイル名の文字化け対策（question_master.pyと同じ処理）
@@ -79,47 +108,83 @@ def aggregate_data(data_files, question_master_df, client_settings_df):
             # question_master_dfの列から対応するファイル名の列を探す
             # 文字化けしたファイル名と修正後のファイル名の両方をチェック
             file_column = None
+            q_to_text_map = {}
+            
             if filename in question_master_df.columns:
                 file_column = filename
             elif original_filename in question_master_df.columns:
                 file_column = original_filename
+            
+            if file_column:
+                file_mapping = question_master_df[['質問文', file_column]].dropna()
+                q_to_text_map = dict(zip(file_mapping[file_column], file_mapping['質問文']))
+                logs.append(f"'{filename}' の質問マッピングを取得しました。({len(q_to_text_map)}個の質問)")
             else:
-                # 列名を確認してログ出力
-                logging.warning(f"File column not found for {filename} or {original_filename}")
-                logging.info(f"Available columns: {list(question_master_df.columns)}")
-                continue
+                # 具体的なファイルマッピングが見つからない場合でも、ファイルを処理する
+                # すべてのファイルから利用可能なマッピングを収集
+                logs.append(f"'{filename}' (元: '{original_filename}') に対応する列が見つかりません。")
+                logs.append(f"利用可能な列: {[col for col in question_master_df.columns if col.endswith('.xlsx')]}")
                 
-            file_mapping = question_master_df[['質問文', file_column]].dropna()
-            q_to_text_map = dict(zip(file_mapping[file_column], file_mapping['質問文']))
+                # 汎用マッピングとして最初に見つかったファイルのマッピングを使用
+                first_file_col = None
+                for col in question_master_df.columns:
+                    if col != '質問文' and col.endswith('.xlsx'):
+                        first_file_col = col
+                        break
+                
+                if first_file_col:
+                    temp_mapping = question_master_df[['質問文', first_file_col]].dropna()
+                    q_to_text_map = dict(zip(temp_mapping[first_file_col], temp_mapping['質問文']))
+                    logs.append(f"'{filename}' では '{first_file_col}' のマッピングを代替使用します。({len(q_to_text_map)}個の質問)")
+                else:
+                    logs.append(f"'{filename}' では利用可能なマッピングがありません。元の列名を使用します。")
+                
+                logging.warning(f"File column not found for {filename} or {original_filename}. Using generic mapping from {first_file_col}.")
+                logging.info(f"Available columns: {list(question_master_df.columns)}")
             
             try:
                 df_data = pd.read_excel(uploaded_file, sheet_name='data')
+                logs.append(f"'{filename}' のdataシートを読み込み。元データ: {len(df_data)}行, {len(df_data.columns)}列")
+                
                 if df_data.empty:
                     logs.append(f"'{filename}' のdataシートは空です。スキップします。")
                     continue
 
+                # グローバルマッピングを使用してすべての列をrename
                 new_columns = {}
+                mapped_count = 0
                 for col in df_data.columns:
-                    if col in q_to_text_map:
-                        new_columns[col] = q_to_text_map[col]
+                    if col in global_q_to_text_map:
+                        new_columns[col] = global_q_to_text_map[col]
+                        mapped_count += 1
                     else:
-                        for q_num, q_text in q_to_text_map.items():
+                        # サフィックス付きの列をチェック（例: Q-001_1, Q-001_2など）
+                        for q_num, q_text in global_q_to_text_map.items():
                             if str(col).startswith(q_num + '_'):
                                 suffix = str(col).replace(q_num, '')
                                 new_columns[col] = f"{q_text}{suffix}"
+                                mapped_count += 1
                                 break
+                
+                logs.append(f"'{filename}' で {mapped_count}/{len(df_data.columns)} 列がマッピングされました。")
                 df_data.rename(columns=new_columns, inplace=True)
                 
                 all_data_list.append(df_data)
-                logs.append(f"'{filename}' のデータを読み込み完了。({len(df_data)}件)")
+                logs.append(f"'{filename}' のデータを読み込み完了。({len(df_data)}件) -> all_data_list合計: {len(all_data_list)}ファイル")
 
             except Exception as e:
                 logs.append(f"'{filename}' のデータシート処理中にエラー: {e}")
+                import traceback
+                logs.append(f"エラー詳細: {traceback.format_exc()}")
 
     if not all_data_list:
         raise ValueError("集計対象のデータが見つかりませんでした。")
     
     logs.append("--- 全データの結合処理を開始 ---")
+    logs.append(f"結合対象のファイル数: {len(all_data_list)}")
+    for i, df in enumerate(all_data_list):
+        logs.append(f"  ファイル{i+1}: {len(df)}件のデータ")
+    
     merged_df = pd.concat(all_data_list, ignore_index=True, sort=False)
     logs.append(f"全ファイルのデータを結合しました。合計: {len(merged_df)}件")
 
@@ -132,6 +197,8 @@ def aggregate_data(data_files, question_master_df, client_settings_df):
     # クライアント別の集計
     client_results = {}
     logs.append("--- クライアント別集計処理を開始 ---")
+    logs.append(f"🔍 デバッグ: {len(data_files)} ファイルアップロード, {len(all_data_list)} ファイル処理済み")
+    logs.append(f"🔍 デバッグ: merged_dfは合計 {len(merged_df)} 行")
     
     for client_name, group in client_settings_df.groupby('クライアント名'):
         logs.append(f"'{client_name}' の集計を開始します...")
@@ -142,16 +209,64 @@ def aggregate_data(data_files, question_master_df, client_settings_df):
         # 固定質問を追加（重複を除外）
         all_questions = list(dict.fromkeys(FIXED_QUESTIONS + questions_to_aggregate))
         logs.append(f"'{client_name}' には固定質問を含む合計 {len(all_questions)} 個の質問を集計します。")
+        logs.append(f"'{client_name}' の内訳: 固定質問{len(FIXED_QUESTIONS)}個 + クライアント質問{len(questions_to_aggregate)}個")
         
+        # このクライアントの質問のみを選択
         cols_to_select = ['NO']
+        found_questions = []
+        not_found_questions = []
+        
+        # クライアント固有の質問リストを作成
+        client_specific_questions = questions_to_aggregate  # クライアント設定からの質問
+        
         for q in all_questions:
+            found = False
+            columns_for_this_question = []
+            
+            # 完全一致の列を探す
             if q in merged_df.columns:
-                cols_to_select.append(q)
+                columns_for_this_question.append(q)
+                found = True
+            
+            # サフィックス付きの列を探す（例: 質問_1, 質問_2など）
             for col in merged_df.columns:
                 if str(col).startswith(q + '_'):
-                    cols_to_select.append(col)
+                    columns_for_this_question.append(col)
+                    found = True
+            
+            # このクライアントの質問リストに含まれている場合のみ追加
+            if found and q in all_questions:  # all_questionsには固定質問+クライアント質問が含まれる
+                cols_to_select.extend(columns_for_this_question)
+                found_questions.append(q)
+            elif not found:
+                not_found_questions.append(q)
         
-        cols_to_select = list(dict.fromkeys(cols_to_select))
+        cols_to_select = list(dict.fromkeys(cols_to_select))  # 重複を除去
+        
+        logs.append(f"'{client_name}' - 見つかった質問: {len(found_questions)}/{len(all_questions)}")
+        logs.append(f"'{client_name}' - 選択した列数: {len(cols_to_select)}")
+        logs.append(f"'{client_name}' - merged_dfの総列数: {len(merged_df.columns)}")
+        
+        if not_found_questions:
+            logs.append(f"'{client_name}' - 見つからなかった質問: {len(not_found_questions)} 個")
+            for q in not_found_questions[:3]:
+                logs.append(f"  - {q[:50]}...")
+            
+        # デバッグ: 実際にどの質問が見つかったか
+        logs.append(f"'{client_name}' - デバッグ: 見つかった質問の例:")
+        for q in found_questions[:3]:
+            logs.append(f"  ✓ {q[:50]}...")
+            
+        # デバッグ: 実際に選択されたcolumnsの例
+        logs.append(f"'{client_name}' - デバッグ: 選択された列の例:")
+        for col in cols_to_select[1:6]:  # NO以外の最初の5列
+            logs.append(f"  → {col[:50]}...")
+            
+        # デバッグ: このクライアント固有の質問があるか
+        client_unique_questions = [q for q in questions_to_aggregate if q not in FIXED_QUESTIONS]
+        logs.append(f"'{client_name}' - クライアント固有質問: {len(client_unique_questions)}個")
+        for q in client_unique_questions[:2]:
+            logs.append(f"  🔹 {q[:50]}...")
         
         if '回答日時' in merged_df.columns:
             cols_to_select.append('回答日時')
@@ -160,31 +275,11 @@ def aggregate_data(data_files, question_master_df, client_settings_df):
             logs.append(f"'{client_name}' の集計対象の質問がデータ内に見つかりませんでした。")
             continue
             
+        # クライアントデータを選択（全762件から必要な列のみ）
         client_data = merged_df[cols_to_select]
         
-        # 基準ファイルを特定（文字化け対策済みのファイル名を使用）
-        file_list = []
-        for f in data_files:
-            if f.name.endswith('.xlsx') and not f.name.startswith('~'):
-                # 同じ文字化け対策処理を適用
-                fname = f.name
-                try:
-                    if any(ord(c) > 127 and ord(c) < 256 for c in fname):
-                        try:
-                            fname = fname.encode('latin-1').decode('utf-8')
-                        except:
-                            pass
-                    if '�' in fname or any(ord(c) > 0xFFFF for c in fname):
-                        import hashlib
-                        file_hash = hashlib.md5(f.name.encode('utf-8', errors='ignore')).hexdigest()[:8]
-                        fname = f"file_{file_hash}.xlsx"
-                except:
-                    import time
-                    fname = f"file_{int(time.time())}.xlsx"
-                file_list.append(fname)
-        
-        file_list = sorted(file_list)
-        base_file = file_list[0] if file_list else None
+        # このクライアント専用のマッピングを作成
+        logs.append(f"'{client_name}' 専用のマッピングを作成中...")
         
         base_mapping_df = pd.DataFrame()
         text_to_q_map = {}
@@ -197,19 +292,26 @@ def aggregate_data(data_files, question_master_df, client_settings_df):
                     if row['質問文'] not in text_to_q_map:
                         text_to_q_map[row['質問文']] = row[file_col]
         
-        # 基準ファイルの情報を取得（出力用）
-        if base_file:
-            if base_file in question_master_df.columns:
-                base_mapping_df = question_master_df[question_master_df.columns.intersection(['質問文', base_file])].copy()
-                base_mapping_df = base_mapping_df.rename(columns={base_file: '質問番号'}).dropna()
-            else:
-                # 元のファイル名で試す
-                for f in data_files:
-                    if f.name.endswith('.xlsx') and not f.name.startswith('~'):
-                        if f.name in question_master_df.columns:
-                            base_mapping_df = question_master_df[question_master_df.columns.intersection(['質問文', f.name])].copy()
-                            base_mapping_df = base_mapping_df.rename(columns={f.name: '質問番号'}).dropna()
-                            break
+        # このクライアント専用のマッピングを作成
+        # クライアントの質問リストから、該当するマッピングのみを抽出
+        client_mapping_data = []
+        
+        for question_text in all_questions:
+            # question_masterでこの質問を探す
+            matching_rows = question_master_df[question_master_df['質問文'] == question_text]
+            if not matching_rows.empty:
+                row = matching_rows.iloc[0]
+                # この質問に対して最初に見つかった非NULLのmappingを使用
+                for col in question_master_df.columns:
+                    if col.endswith('.xlsx') and pd.notna(row[col]):
+                        client_mapping_data.append({
+                            '質問文': question_text,
+                            '質問番号': row[col]
+                        })
+                        break
+        
+        base_mapping_df = pd.DataFrame(client_mapping_data)
+        logs.append(f"'{client_name}' のマッピング: {len(base_mapping_df)}個の質問")
 
         # client_dataの列名を質問文から質問番号へ再変換（FA列も考慮）
         final_rename_map = {}
@@ -230,10 +332,19 @@ def aggregate_data(data_files, question_master_df, client_settings_df):
         
         client_results[client_name] = {
             'data': output_client_data,
-            'base_file': base_file,
+            'base_file': f"{client_name}専用マッピング",
             'mapping': base_mapping_df
         }
         
         logs.append(f"'{client_name}' の集計が完了しました。")
+    
+    # サマリー情報をログに追加
+    logs.append("=== サマリー ===")
+    logs.append(f"アップロードファイル数: {len(data_files)}")
+    logs.append(f"処理済みファイル数: {len(all_data_list)}")
+    logs.append(f"merged_df総行数: {len(merged_df)}")
+    logs.append(f"処理済みクライアント数: {len(client_results)}")
+    for i, df in enumerate(all_data_list):
+        logs.append(f"  ファイル{i+1}の寄与行数: {len(df)} 行")
     
     return client_results, merged_df, logs
