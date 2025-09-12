@@ -1,12 +1,12 @@
 import streamlit as st
 import pandas as pd
 import io
-# from modules.auth import check_password  # 一時的にコメントアウト
+from modules.auth import check_password  # 一時的にコメントアウト
 from modules.aggregation import aggregate_data
 
 # 認証チェック（一時的にコメントアウト - ファイルアップロード問題の調査のため）
-# if not check_password():
-#     st.stop()
+if not check_password():
+    st.stop()
 
 st.title("📊 ステップ3: データ集計")
 st.markdown("---")
