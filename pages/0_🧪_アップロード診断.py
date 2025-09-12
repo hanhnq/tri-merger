@@ -1,5 +1,10 @@
 import streamlit as st
 import sys
+from modules.auth import check_password  # 一時的にコメントアウト
+
+# 認証チェック（一時的にコメントアウト - ファイルアップロード問題の調査のため）
+if not check_password():
+    st.stop()
 
 st.title("🧪 アップロード診断")
 st.info("Squadbase配下でのファイルアップロード挙動を切り分けます。")
