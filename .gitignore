@@ -61,3 +61,5 @@ streamlit.log
 # Temporary files
 *.tmp
 *.temp
+/run_app.sh
+/run_app.bat

@@ -72,13 +72,18 @@ def aggregate_data(data_files, question_master_df, client_settings_df):
     logs.append(f"統合マッピングを作成: {len(global_q_to_text_map)}個の質問コードをテキストにマッピング")
     logs.append(f"question_masterから検出された総質問数: {len(question_master_df)}個")
     
+    print(f"🔍 DEBUG: Starting to process {len(data_files)} files")
+
     for uploaded_file in data_files:
+        print(f"🔍 DEBUG: Processing file: {uploaded_file.name}")
+
         # ファイル名の文字化け対策（question_master.pyと同じ処理）
         original_filename = uploaded_file.name
         filename = original_filename
-        
+
         # デバッグ用ログ
         logging.info(f"Original filename in aggregation: {repr(original_filename)}")
+        print(f"🔍 DEBUG: Original filename: {repr(original_filename)}")
         
         # 文字化けの検出と修正
         try:
@@ -143,7 +148,9 @@ def aggregate_data(data_files, question_master_df, client_settings_df):
                 logging.info(f"Available columns: {list(question_master_df.columns)}")
             
             try:
+                print(f"🔍 DEBUG: About to read Excel file: {filename}")
                 df_data = pd.read_excel(uploaded_file, sheet_name='data')
+                print(f"✅ DEBUG: Successfully read Excel: {len(df_data)} rows, {len(df_data.columns)} columns")
                 logs.append(f"'{filename}' のdataシートを読み込み。元データ: {len(df_data)}行, {len(df_data.columns)}列")
                 
                 if df_data.empty:
@@ -173,11 +180,21 @@ def aggregate_data(data_files, question_master_df, client_settings_df):
                 logs.append(f"'{filename}' のデータを読み込み完了。({len(df_data)}件) -> all_data_list合計: {len(all_data_list)}ファイル")
 
             except Exception as e:
-                logs.append(f"'{filename}' のデータシート処理中にエラー: {e}")
+                print(f"❌ DEBUG: Error processing {filename}: {e}")
                 import traceback
-                logs.append(f"エラー詳細: {traceback.format_exc()}")
+                error_traceback = traceback.format_exc()
+                print(f"❌ DEBUG: Full traceback:\n{error_traceback}")
+                logs.append(f"'{filename}' のデータシート処理中にエラー: {e}")
+                logs.append(f"エラー詳細: {error_traceback}")
+
+    print(f"🔍 DEBUG: Checking data files processing results")
+    print(f"   all_data_list length: {len(all_data_list)}")
+    print(f"   Original data_files count: {len(data_files)}")
 
     if not all_data_list:
+        print(f"❌ NO DATA FOUND! This is the error, not reindexing!")
+        print(f"   Files were processed but no data sheets were successfully read")
+        print(f"   Check the logs above for file processing errors")
         raise ValueError("集計対象のデータが見つかりませんでした。")
     
     logs.append("--- 全データの結合処理を開始 ---")
@@ -185,13 +202,165 @@ def aggregate_data(data_files, question_master_df, client_settings_df):
     for i, df in enumerate(all_data_list):
         logs.append(f"  ファイル{i+1}: {len(df)}件のデータ")
     
-    merged_df = pd.concat(all_data_list, ignore_index=True, sort=False)
+    # Fix duplicate columns before concat to prevent reindexing errors
+    def fix_duplicate_columns_for_concat(dfs_list):
+        """Fix duplicate column names across dataframes before concat"""
+        if len(dfs_list) <= 1:
+            return dfs_list
+
+        print(f"🔍 Checking for duplicate columns across {len(dfs_list)} dataframes")
+
+        # Collect all column names from all dataframes
+        all_columns = set()
+        df_columns = []
+
+        for i, df in enumerate(dfs_list):
+            cols = list(df.columns)
+            df_columns.append(cols)
+            all_columns.update(cols)
+            print(f"   DataFrame {i+1}: {len(cols)} columns")
+
+            # Check for duplicates within the same dataframe
+            if df.columns.duplicated().any():
+                print(f"   ⚠️ DataFrame {i+1} has internal duplicate columns")
+
+        # Find columns that appear in multiple dataframes
+        column_counts = {}
+        for i, cols in enumerate(df_columns):
+            for col in cols:
+                if col not in column_counts:
+                    column_counts[col] = []
+                column_counts[col].append(i)
+
+        # Identify problematic columns (appear in multiple dataframes)
+        problematic_columns = {col: dfs for col, dfs in column_counts.items() if len(dfs) > 1}
+
+        if problematic_columns:
+            print(f"   ⚠️ Found {len(problematic_columns)} columns appearing in multiple dataframes")
+            for col, df_indices in list(problematic_columns.items())[:5]:  # Show first 5
+                print(f"     '{col}' appears in dataframes: {df_indices}")
+
+        # Create union of all columns for consistent structure
+        all_columns_list = sorted(list(all_columns))
+        print(f"   Total unique columns across all dataframes: {len(all_columns_list)}")
+
+        # Reindex all dataframes to have the same columns
+        fixed_dfs = []
+        for i, df in enumerate(dfs_list):
+            print(f"   Reindexing DataFrame {i+1}...")
+
+            # Fix duplicate column names first - this is the core issue!
+            df_copy = df.copy()
+            if df_copy.columns.duplicated().any():
+                print(f"     ⚠️ Found {df_copy.columns.duplicated().sum()} duplicate column names, fixing...")
+                # Make column names unique by adding suffixes using pandas built-in method
+                cols = pd.io.common.dedup_names(df_copy.columns, is_potential_multiindex=False)
+                df_copy.columns = cols
+                print(f"     ✅ Fixed duplicate columns using pandas dedup_names")
+            else:
+                print(f"     ✅ No duplicate columns found")
+
+            # Reindex to include all columns, filling missing with NaN
+            try:
+                df_reindexed = df_copy.reindex(columns=all_columns_list, fill_value=None)
+                fixed_dfs.append(df_reindexed)
+                print(f"     ✅ Reindexed from {len(df_copy.columns)} to {len(df_reindexed.columns)} columns")
+            except Exception as e:
+                print(f"     ❌ Reindexing failed: {e}")
+                # Fallback: keep original dataframe
+                fixed_dfs.append(df_copy)
+
+        return fixed_dfs
+
+    # Debug logging for reindex issues
+    print(f"🔍 DEBUG: About to concat {len(all_data_list)} dataframes")
+    for i, df in enumerate(all_data_list):
+        print(f"   DataFrame {i+1}: shape={df.shape}, index_unique={df.index.is_unique}")
+        print(f"   Columns: {len(df.columns)} columns")
+        if df.columns.duplicated().any():
+            print(f"   ⚠️ Duplicate columns detected!")
+
+    # Apply simple duplicate column fix before concat
+    print(f"🔧 Applying simple duplicate column resolution...")
+
+    # Step 1: Fix duplicate columns within each dataframe
+    simple_fixed_list = []
+    for i, df in enumerate(all_data_list):
+        print(f"   Processing DataFrame {i+1}: {df.shape}")
+
+        if df.columns.duplicated().any():
+            print(f"     ⚠️ Found {df.columns.duplicated().sum()} duplicate columns, fixing...")
+            # Simple approach: use make_unique from pandas
+            df_copy = df.copy()
+            df_copy.columns = pd.io.common.dedup_names(df_copy.columns, is_potential_multiindex=False)
+            print(f"     ✅ Fixed duplicate columns")
+            simple_fixed_list.append(df_copy)
+        else:
+            print(f"     ✅ No duplicate columns")
+            simple_fixed_list.append(df.copy())
+
+    # Step 2: Try concat with ignore_index and sort=False
+    try:
+        print(f"🔧 Attempting concat with {len(simple_fixed_list)} dataframes...")
+        merged_df = pd.concat(simple_fixed_list, ignore_index=True, sort=False)
+        print(f"✅ Concat successful: {merged_df.shape}")
+    except Exception as e:
+        print(f"❌ CONCAT FAILED: {e}")
+
+        # Fallback: Try with different concat options
+        print(f"🔧 Trying fallback concat options...")
+        try:
+            # Reset index on all dataframes first
+            reset_list = []
+            for i, df in enumerate(simple_fixed_list):
+                df_reset = df.reset_index(drop=True)
+                reset_list.append(df_reset)
+
+            merged_df = pd.concat(reset_list, ignore_index=True, sort=False)
+            print(f"✅ Fallback concat successful: {merged_df.shape}")
+        except Exception as e2:
+            print(f"❌ Fallback concat also failed: {e2}")
+            import traceback
+            traceback.print_exc()
+            raise
+
     logs.append(f"全ファイルのデータを結合しました。合計: {len(merged_df)}件")
 
     if '回答日時' in merged_df.columns:
-        merged_df['回答日時'] = pd.to_datetime(merged_df['回答日時'], errors='coerce')
-        merged_df.dropna(subset=['回答日時'], inplace=True)
-        merged_df.sort_values(by='回答日時', inplace=True)
+        print(f"🔍 DEBUG: Processing datetime column")
+        print(f"   merged_df shape before datetime: {merged_df.shape}")
+        print(f"   Index unique before datetime: {merged_df.index.is_unique}")
+
+        try:
+            merged_df['回答日時'] = pd.to_datetime(merged_df['回答日時'], errors='coerce')
+            print(f"✅ Datetime conversion successful")
+        except Exception as e:
+            print(f"❌ DATETIME CONVERSION FAILED: {e}")
+            raise
+
+        try:
+            before_drop = len(merged_df)
+            merged_df.dropna(subset=['回答日時'], inplace=True)
+            after_drop = len(merged_df)
+            print(f"✅ dropna successful: {before_drop} -> {after_drop}")
+        except Exception as e:
+            print(f"❌ DROPNA FAILED: {e}")
+            import traceback
+            traceback.print_exc()
+            raise
+
+        try:
+            print(f"🔍 DEBUG: About to sort by 回答日時")
+            print(f"   Index before sort: unique={merged_df.index.is_unique}")
+            merged_df.sort_values(by='回答日時', inplace=True)
+            print(f"✅ Sort successful")
+        except Exception as e:
+            print(f"❌ SORT_VALUES FAILED: {e}")
+            print("🎯 THIS MIGHT BE THE REINDEXING ERROR!")
+            import traceback
+            traceback.print_exc()
+            raise
+
         logs.append(f"回答日時でソートしました。")
 
     # クライアント別の集計
@@ -276,7 +445,20 @@ def aggregate_data(data_files, question_master_df, client_settings_df):
             continue
             
         # クライアントデータを選択（全762件から必要な列のみ）
-        client_data = merged_df[cols_to_select]
+        print(f"🔍 DEBUG: Selecting client data for {client_name}")
+        print(f"   Columns to select: {len(cols_to_select)}")
+        print(f"   merged_df shape: {merged_df.shape}")
+        print(f"   merged_df index unique: {merged_df.index.is_unique}")
+
+        try:
+            client_data = merged_df[cols_to_select]
+            print(f"✅ Client data selection successful: {client_data.shape}")
+        except Exception as e:
+            print(f"❌ CLIENT DATA SELECTION FAILED: {e}")
+            print("🎯 THIS MIGHT BE THE REINDEXING ERROR!")
+            import traceback
+            traceback.print_exc()
+            raise
         
         # このクライアント専用のマッピングを作成
         logs.append(f"'{client_name}' 専用のマッピングを作成中...")
