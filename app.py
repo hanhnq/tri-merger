@@ -1,6 +1,12 @@
 import streamlit as st
 from modules.auth import check_password, logout
 
+# Debug patch for reindex errors
+try:
+    exec(open('debug_reindex_error.py').read())
+except:
+    pass
+
 # ページ設定
 st.set_page_config(
     page_title="アンケート集計システム",
