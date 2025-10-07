@@ -1,0 +1,6 @@
+
+=== AGGREGATE_DATA CALLED ===
+Number of data_files received: 2
+  File 1: 【2025年8月14日】一般インターネット調査 (2).xlsx (size: 266994 bytes)
+  File 2: 【2025年8月20日】一般インターネット調査 (2).xlsx (size: 79422 bytes)
+==============================
