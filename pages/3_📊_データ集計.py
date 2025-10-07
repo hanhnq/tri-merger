@@ -159,7 +159,11 @@ if st.session_state.aggregation_results:
 
             # マッピング情報
             if not client_info['mapping'].empty:
-                client_info['mapping'].to_excel(writer, sheet_name='基準質問マッピング', index=False)
+                # Reorder columns: 質問番号 first, then 質問文
+                mapping_df = client_info['mapping'].copy()
+                if '質問番号' in mapping_df.columns and '質問文' in mapping_df.columns:
+                    mapping_df = mapping_df[['質問番号', '質問文']]
+                mapping_df.to_excel(writer, sheet_name='基準質問マッピング', index=False)
 
             # Set Calibri font for all sheets
             workbook = writer.book
@@ -174,8 +178,9 @@ if st.session_state.aggregation_results:
                     for row in range(len(base_info_df) + 1):
                         worksheet.set_row(row, None, calibri_format)
                 elif sheet_name == '基準質問マッピング':
-                    for row in range(len(client_info['mapping']) + 1):
-                        worksheet.set_row(row, None, calibri_format)
+                    if not client_info['mapping'].empty:
+                        for row in range(len(mapping_df) + 1):
+                            worksheet.set_row(row, None, calibri_format)
         
         buffer.seek(0)
         
