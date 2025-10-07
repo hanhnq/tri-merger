@@ -107,6 +107,17 @@ if 'question_master' in st.session_state:
     buffer = io.BytesIO()
     with pd.ExcelWriter(buffer, engine='xlsxwriter') as writer:
         st.session_state.question_master.to_excel(writer, index=False)
+
+        # Set Calibri font for all cells
+        workbook = writer.book
+        worksheet = writer.sheets['Sheet1']
+
+        # Create format with Calibri font
+        calibri_format = workbook.add_format({'font_name': 'Calibri'})
+
+        # Apply font to all rows
+        for row in range(len(st.session_state.question_master) + 1):  # +1 for header
+            worksheet.set_row(row, None, calibri_format)
     buffer.seek(0)
     
     st.download_button(

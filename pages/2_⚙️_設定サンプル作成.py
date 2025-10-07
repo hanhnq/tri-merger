@@ -92,7 +92,7 @@ st.markdown("## 📥 サンプルファイルのダウンロード")
 buffer = io.BytesIO()
 with pd.ExcelWriter(buffer, engine='xlsxwriter') as writer:
     sample_df.to_excel(writer, sheet_name='設定', index=False)
-    
+
     # 説明シートの追加
     explanation_data = {
         '項目': ['クライアント名', '集計対象の質問文'],
@@ -107,6 +107,19 @@ with pd.ExcelWriter(buffer, engine='xlsxwriter') as writer:
     }
     explanation_df = pd.DataFrame(explanation_data)
     explanation_df.to_excel(writer, sheet_name='説明', index=False)
+
+    # Set Calibri font for all sheets
+    workbook = writer.book
+    calibri_format = workbook.add_format({'font_name': 'Calibri'})
+
+    # Apply font to all sheets
+    for sheet_name, worksheet in writer.sheets.items():
+        if sheet_name == '設定':
+            for row in range(len(sample_df) + 1):
+                worksheet.set_row(row, None, calibri_format)
+        elif sheet_name == '説明':
+            for row in range(len(explanation_df) + 1):
+                worksheet.set_row(row, None, calibri_format)
     
 buffer.seek(0)
 

@@ -117,6 +117,17 @@ if st.session_state.aggregation_results:
         buffer = io.BytesIO()
         with pd.ExcelWriter(buffer, engine='xlsxwriter') as writer:
             st.session_state.merged_df.to_excel(writer, sheet_name='全結合データ', index=False)
+
+            # Set Calibri font for all cells
+            workbook = writer.book
+            worksheet = writer.sheets['全結合データ']
+
+            # Create format with Calibri font
+            calibri_format = workbook.add_format({'font_name': 'Calibri'})
+
+            # Apply font to all rows
+            for row in range(len(st.session_state.merged_df) + 1):  # +1 for header
+                worksheet.set_row(row, None, calibri_format)
         buffer.seek(0)
         
         st.download_button(
@@ -141,14 +152,30 @@ if st.session_state.aggregation_results:
         with pd.ExcelWriter(buffer, engine='xlsxwriter') as writer:
             # データシート
             client_info['data'].to_excel(writer, sheet_name='元データ', index=False)
-            
+
             # 基準ファイル情報
             base_info_df = pd.DataFrame([{'基準ファイル名': client_info['base_file']}])
             base_info_df.to_excel(writer, sheet_name='基準ファイル情報', index=False)
-            
+
             # マッピング情報
             if not client_info['mapping'].empty:
                 client_info['mapping'].to_excel(writer, sheet_name='基準質問マッピング', index=False)
+
+            # Set Calibri font for all sheets
+            workbook = writer.book
+            calibri_format = workbook.add_format({'font_name': 'Calibri'})
+
+            # Apply font to all sheets
+            for sheet_name, worksheet in writer.sheets.items():
+                if sheet_name == '元データ':
+                    for row in range(len(client_info['data']) + 1):
+                        worksheet.set_row(row, None, calibri_format)
+                elif sheet_name == '基準ファイル情報':
+                    for row in range(len(base_info_df) + 1):
+                        worksheet.set_row(row, None, calibri_format)
+                elif sheet_name == '基準質問マッピング':
+                    for row in range(len(client_info['mapping']) + 1):
+                        worksheet.set_row(row, None, calibri_format)
         
         buffer.seek(0)
         
