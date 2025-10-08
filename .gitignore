@@ -63,3 +63,24 @@ streamlit.log
 *.temp
 /run_app.sh
 /run_app.bat
+
+# Test and debug files
+test_*.py
+debug_*.py
+debug_*.txt
+analyze_*.py
+check_*.py
+create_*.py
+extract_*.py
+fix_*.py
+generate_*.py
+direct_*.py
+trigger_*.py
+*_test.py
+*_debug.py
+*.debug.py
+debug_log.txt
+final_debug_instructions.md
+AGGREGATION_IMPROVEMENTS.md
+作業計画.md
+AGENTS.md
