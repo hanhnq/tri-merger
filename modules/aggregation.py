@@ -202,127 +202,39 @@ def aggregate_data(data_files, question_master_df, client_settings_df):
     for i, df in enumerate(all_data_list):
         logs.append(f"  ファイル{i+1}: {len(df)}件のデータ")
     
-    # Fix duplicate columns before concat to prevent reindexing errors
-    def fix_duplicate_columns_for_concat(dfs_list):
-        """Fix duplicate column names across dataframes before concat"""
-        if len(dfs_list) <= 1:
-            return dfs_list
+    # 🎯 Smart Row Stacking: Handle same-structure survey files properly
+    print(f"🔧 Smart stacking {len(all_data_list)} survey dataframes...")
 
-        print(f"🔍 Checking for duplicate columns across {len(dfs_list)} dataframes")
-
-        # Collect all column names from all dataframes
-        all_columns = set()
-        df_columns = []
-
-        for i, df in enumerate(dfs_list):
-            cols = list(df.columns)
-            df_columns.append(cols)
-            all_columns.update(cols)
-            print(f"   DataFrame {i+1}: {len(cols)} columns")
-
-            # Check for duplicates within the same dataframe
-            if df.columns.duplicated().any():
-                print(f"   ⚠️ DataFrame {i+1} has internal duplicate columns")
-
-        # Find columns that appear in multiple dataframes
-        column_counts = {}
-        for i, cols in enumerate(df_columns):
-            for col in cols:
-                if col not in column_counts:
-                    column_counts[col] = []
-                column_counts[col].append(i)
-
-        # Identify problematic columns (appear in multiple dataframes)
-        problematic_columns = {col: dfs for col, dfs in column_counts.items() if len(dfs) > 1}
-
-        if problematic_columns:
-            print(f"   ⚠️ Found {len(problematic_columns)} columns appearing in multiple dataframes")
-            for col, df_indices in list(problematic_columns.items())[:5]:  # Show first 5
-                print(f"     '{col}' appears in dataframes: {df_indices}")
-
-        # Create union of all columns for consistent structure
-        all_columns_list = sorted(list(all_columns))
-        print(f"   Total unique columns across all dataframes: {len(all_columns_list)}")
-
-        # Reindex all dataframes to have the same columns
-        fixed_dfs = []
-        for i, df in enumerate(dfs_list):
-            print(f"   Reindexing DataFrame {i+1}...")
-
-            # Fix duplicate column names first - this is the core issue!
-            df_copy = df.copy()
-            if df_copy.columns.duplicated().any():
-                print(f"     ⚠️ Found {df_copy.columns.duplicated().sum()} duplicate column names, fixing...")
-                # Make column names unique by adding suffixes using pandas built-in method
-                cols = pd.io.common.dedup_names(df_copy.columns, is_potential_multiindex=False)
-                df_copy.columns = cols
-                print(f"     ✅ Fixed duplicate columns using pandas dedup_names")
-            else:
-                print(f"     ✅ No duplicate columns found")
-
-            # Reindex to include all columns, filling missing with NaN
-            try:
-                df_reindexed = df_copy.reindex(columns=all_columns_list, fill_value=None)
-                fixed_dfs.append(df_reindexed)
-                print(f"     ✅ Reindexed from {len(df_copy.columns)} to {len(df_reindexed.columns)} columns")
-            except Exception as e:
-                print(f"     ❌ Reindexing failed: {e}")
-                # Fallback: keep original dataframe
-                fixed_dfs.append(df_copy)
-
-        return fixed_dfs
-
-    # Debug logging for reindex issues
-    print(f"🔍 DEBUG: About to concat {len(all_data_list)} dataframes")
-    for i, df in enumerate(all_data_list):
-        print(f"   DataFrame {i+1}: shape={df.shape}, index_unique={df.index.is_unique}")
-        print(f"   Columns: {len(df.columns)} columns")
-        if df.columns.duplicated().any():
-            print(f"   ⚠️ Duplicate columns detected!")
-
-    # Apply simple duplicate column fix before concat
-    print(f"🔧 Applying simple duplicate column resolution...")
-
-    # Step 1: Fix duplicate columns within each dataframe
-    simple_fixed_list = []
-    for i, df in enumerate(all_data_list):
-        print(f"   Processing DataFrame {i+1}: {df.shape}")
-
-        if df.columns.duplicated().any():
-            print(f"     ⚠️ Found {df.columns.duplicated().sum()} duplicate columns, fixing...")
-            # Simple approach: use make_unique from pandas
-            df_copy = df.copy()
-            df_copy.columns = pd.io.common.dedup_names(df_copy.columns, is_potential_multiindex=False)
-            print(f"     ✅ Fixed duplicate columns")
-            simple_fixed_list.append(df_copy)
-        else:
-            print(f"     ✅ No duplicate columns")
-            simple_fixed_list.append(df.copy())
-
-    # Step 2: Try concat with ignore_index and sort=False
-    try:
-        print(f"🔧 Attempting concat with {len(simple_fixed_list)} dataframes...")
-        merged_df = pd.concat(simple_fixed_list, ignore_index=True, sort=False)
-        print(f"✅ Concat successful: {merged_df.shape}")
-    except Exception as e:
-        print(f"❌ CONCAT FAILED: {e}")
-
-        # Fallback: Try with different concat options
-        print(f"🔧 Trying fallback concat options...")
+    if len(all_data_list) == 1:
+        merged_df = all_data_list[0].copy()
+        print(f"✅ Single file: {merged_df.shape}")
+    else:
+        # For multiple files with same structure, just stack rows vertically
+        # This is the correct approach for survey data from different days/batches
         try:
-            # Reset index on all dataframes first
-            reset_list = []
-            for i, df in enumerate(simple_fixed_list):
-                df_reset = df.reset_index(drop=True)
-                reset_list.append(df_reset)
+            merged_df = pd.concat(all_data_list, ignore_index=True, sort=False)
+            print(f"✅ Row stacking successful: {merged_df.shape}")
+            print(f"   Combined {len(all_data_list)} files with {len(merged_df)} total rows")
+        except Exception as e:
+            print(f"❌ Row stacking failed: {e}")
+            # If concat fails, there might be column mismatch - align columns first
+            print(f"🔧 Aligning columns before stacking...")
 
-            merged_df = pd.concat(reset_list, ignore_index=True, sort=False)
-            print(f"✅ Fallback concat successful: {merged_df.shape}")
-        except Exception as e2:
-            print(f"❌ Fallback concat also failed: {e2}")
-            import traceback
-            traceback.print_exc()
-            raise
+            # Get all unique columns across all dataframes
+            all_columns = set()
+            for df in all_data_list:
+                all_columns.update(df.columns)
+
+            # Align all dataframes to have same columns
+            aligned_dfs = []
+            for i, df in enumerate(all_data_list):
+                aligned_df = df.reindex(columns=all_columns, fill_value=None)
+                aligned_dfs.append(aligned_df)
+                print(f"   Aligned DataFrame {i+1}: {aligned_df.shape}")
+
+            # Now try concat again
+            merged_df = pd.concat(aligned_dfs, ignore_index=True, sort=False)
+            print(f"✅ Aligned row stacking successful: {merged_df.shape}")
 
     logs.append(f"全ファイルのデータを結合しました。合計: {len(merged_df)}件")
 
