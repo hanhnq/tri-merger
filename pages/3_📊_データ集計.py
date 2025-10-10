@@ -157,13 +157,39 @@ if st.session_state.aggregation_results:
             base_info_df = pd.DataFrame([{'基準ファイル名': client_info['base_file']}])
             base_info_df.to_excel(writer, sheet_name='基準ファイル情報', index=False)
 
-            # マッピング情報
+            # マッピング情報 (新フォーマット: 質問対応表形式)
+            mapping_df = None
+            formatted_df = None
+
             if not client_info['mapping'].empty:
-                # Reorder columns: 質問番号 first, then 質問文
                 mapping_df = client_info['mapping'].copy()
-                if '質問番号' in mapping_df.columns and '質問文' in mapping_df.columns:
-                    mapping_df = mapping_df[['質問番号', '質問文']]
-                mapping_df.to_excel(writer, sheet_name='基準質問マッピング', index=False)
+
+                # 質問対応表形式の場合 (4列: 番号, 条件, 内容, 区分)
+                if '番号' in mapping_df.columns and '内容' in mapping_df.columns:
+                    # 質問別にセパレータ行を追加してフォーマット
+                    formatted_mapping = []
+                    current_question = None
+
+                    for _, row in mapping_df.iterrows():
+                        # 質問の開始 (Q-で始まる番号)
+                        if str(row['番号']).startswith('Q-'):
+                            # 前の質問の後に空行を追加 (最初の質問以外)
+                            if current_question is not None:
+                                formatted_mapping.append({
+                                    '番号': '', '条件': '', '内容': '', '区分': ''
+                                })
+                            current_question = row['番号']
+
+                        formatted_mapping.append(row.to_dict())
+
+                    # フォーマット済みデータフレームを作成
+                    formatted_df = pd.DataFrame(formatted_mapping)
+                    formatted_df.to_excel(writer, sheet_name='基準質問マッピング', index=False)
+                else:
+                    # 古いフォーマットのフォールバック
+                    if '質問番号' in mapping_df.columns and '質問文' in mapping_df.columns:
+                        mapping_df = mapping_df[['質問番号', '質問文']]
+                    mapping_df.to_excel(writer, sheet_name='基準質問マッピング', index=False)
 
             # Set Calibri font for all sheets
             workbook = writer.book
@@ -179,8 +205,61 @@ if st.session_state.aggregation_results:
                         worksheet.set_row(row, None, calibri_format)
                 elif sheet_name == '基準質問マッピング':
                     if not client_info['mapping'].empty:
-                        for row in range(len(mapping_df) + 1):
-                            worksheet.set_row(row, None, calibri_format)
+                        # 基準質問マッピング専用のフォーマット設定
+                        header_format = workbook.add_format({
+                            'font_name': 'Calibri',
+                            'bold': True,
+                            'border': 1,
+                            'bg_color': '#F2F2F2'
+                        })
+
+                        question_format = workbook.add_format({
+                            'font_name': 'Calibri',
+                            'bold': True,
+                            'border': 1,
+                            'bg_color': '#E6F3FF'
+                        })
+
+                        choice_format = workbook.add_format({
+                            'font_name': 'Calibri',
+                            'border': 1
+                        })
+
+                        empty_format = workbook.add_format({
+                            'font_name': 'Calibri'
+                        })
+
+                        # ヘッダー行にフォーマット適用
+                        for col in range(4):  # 4列: 番号, 条件, 内容, 区分
+                            worksheet.write(0, col, ['番号', '条件', '内容', '区分'][col], header_format)
+
+                        # データ行にフォーマット適用
+                        if formatted_df is not None and '番号' in client_info['mapping'].columns:
+                            # 新フォーマットの場合: 質問対応表形式
+                            for row_idx, (_, row) in enumerate(formatted_df.iterrows(), start=1):
+                                row_format = choice_format  # デフォルト
+
+                                # 質問行 (Q-で始まる)
+                                if str(row['番号']).startswith('Q-'):
+                                    row_format = question_format
+                                # 空行
+                                elif str(row['番号']).strip() == '':
+                                    row_format = empty_format
+
+                                for col_idx, col_name in enumerate(['番号', '条件', '内容', '区分']):
+                                    cell_value = row[col_name] if col_name in row else ''
+                                    worksheet.write(row_idx, col_idx, cell_value, row_format)
+
+                            # 列幅を自動調整
+                            worksheet.set_column('A:A', 10)  # 番号
+                            worksheet.set_column('B:B', 12)  # 条件
+                            worksheet.set_column('C:C', 50)  # 内容
+                            worksheet.set_column('D:D', 8)   # 区分
+                        else:
+                            # 古いフォーマットのフォールバック
+                            if mapping_df is not None:
+                                for row in range(len(mapping_df) + 1):
+                                    worksheet.set_row(row, None, calibri_format)
         
         buffer.seek(0)
         
