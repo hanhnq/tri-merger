@@ -18,48 +18,6 @@ FIXED_QUESTIONS = [
     'あなたに当てはまる選択肢をお知らせください。'
 ]
 
-def extract_question_mapping_from_survey(uploaded_file):
-    """
-    アンケートファイルの質問対応表シートから質問とその選択肢を抽出する
-
-    Args:
-        uploaded_file: アップロードされたExcelファイル
-
-    Returns:
-        list: 質問対応表と同じ形式の辞書のリスト
-              [{'番号': 'Q-001', '条件': '必須回答', '内容': '質問文', '区分': 'S/A'},
-               {'番号': '1', '条件': '', '内容': '選択肢1', '区分': ''}, ...]
-    """
-    try:
-        # 質問対応表シートが存在するかチェック
-        xl_file = pd.ExcelFile(uploaded_file)
-        if '質問対応表' not in xl_file.sheet_names:
-            return []
-
-        # 質問対応表シートを読み込み
-        question_df = pd.read_excel(uploaded_file, sheet_name='質問対応表', header=1)
-
-        # データをクリーンアップ
-        mapping_data = []
-        for _, row in question_df.iterrows():
-            # 空行をスキップ
-            if pd.isna(row.iloc[0]) and pd.isna(row.iloc[2]):
-                continue
-
-            # 4列の構造に変換
-            entry = {
-                '番号': str(row.iloc[0]) if pd.notna(row.iloc[0]) else '',
-                '条件': str(row.iloc[1]) if pd.notna(row.iloc[1]) else '',
-                '内容': str(row.iloc[2]) if pd.notna(row.iloc[2]) else '',
-                '区分': str(row.iloc[3]) if pd.notna(row.iloc[3]) else ''
-            }
-            mapping_data.append(entry)
-
-        return mapping_data
-
-    except Exception as e:
-        logging.warning(f"質問対応表の読み込みに失敗: {e}")
-        return []
 
 def aggregate_data(data_files, question_master_df, client_settings_df):
     """
@@ -104,22 +62,8 @@ def aggregate_data(data_files, question_master_df, client_settings_df):
         file_size = getattr(f, 'size', 'unknown')
         logs.append(f"  {i+1}. {f.name} (サイズ: {file_size} bytes)")
     
-    # 全ファイルから統合マッピングを作成（90個の質問すべてをカバー）
-    global_q_to_text_map = {}
-    for col in question_master_df.columns:
-        if col != '質問文' and col != '初出ファイル' and col.endswith('.xlsx'):
-            temp_mapping = question_master_df[['質問文', col]].dropna()
-            for _, row in temp_mapping.iterrows():
-                # まだマッピングされていない質問のみ追加
-                if row[col] not in global_q_to_text_map:
-                    global_q_to_text_map[row[col]] = row['質問文']
-    
-    logs.append(f"統合マッピングを作成: {len(global_q_to_text_map)}個の質問コードをテキストにマッピング")
     logs.append(f"question_masterから検出された総質問数: {len(question_master_df)}個")
-
-    # 🆕 質問対応表の包括的データを収集
-    comprehensive_question_mapping = []
-
+    logs.append("ファイル固有の質問マッピングを使用します（各ファイルが独自の質問コードマッピングを持つため）")
     print(f"🔍 DEBUG: Starting to process {len(data_files)} files")
 
     for uploaded_file in data_files:
@@ -162,11 +106,26 @@ def aggregate_data(data_files, question_master_df, client_settings_df):
             # 文字化けしたファイル名と修正後のファイル名の両方をチェック
             file_column = None
             q_to_text_map = {}
-            
+
+            # 1. 完全一致をチェック
             if filename in question_master_df.columns:
                 file_column = filename
             elif original_filename in question_master_df.columns:
                 file_column = original_filename
+            # 2. Plus_マージ完成データ.xlsx の特別なケース
+            elif "Plus_マージ完成データ" in filename:
+                for col in question_master_df.columns:
+                    if "Plus2" in col and not col.startswith("[コピー]"):
+                        file_column = col
+                        break
+            # 3. 部分一致での検索（fallback）
+            else:
+                # ファイル名の主要部分を抽出して検索
+                clean_filename = filename.replace(".xlsx", "")
+                for col in question_master_df.columns:
+                    if col.endswith('.xlsx') and clean_filename in col:
+                        file_column = col
+                        break
             
             if file_column:
                 file_mapping = question_master_df[['質問文', file_column]].dropna()
@@ -205,22 +164,16 @@ def aggregate_data(data_files, question_master_df, client_settings_df):
                     logs.append(f"'{filename}' のdataシートは空です。スキップします。")
                     continue
 
-                # 🆕 このファイルの質問対応表データを抽出して追加
-                file_question_mapping = extract_question_mapping_from_survey(uploaded_file)
-                if file_question_mapping:
-                    comprehensive_question_mapping.extend(file_question_mapping)
-                    logs.append(f"'{filename}' から {len(file_question_mapping)} 行の質問対応表データを抽出")
-
-                # グローバルマッピングを使用してすべての列をrename
+                # ファイル固有のマッピングを使用してすべての列をrename
                 new_columns = {}
                 mapped_count = 0
                 for col in df_data.columns:
-                    if col in global_q_to_text_map:
-                        new_columns[col] = global_q_to_text_map[col]
+                    if col in q_to_text_map:
+                        new_columns[col] = q_to_text_map[col]
                         mapped_count += 1
                     else:
                         # サフィックス付きの列をチェック（例: Q-001_1, Q-001_2など）
-                        for q_num, q_text in global_q_to_text_map.items():
+                        for q_num, q_text in q_to_text_map.items():
                             if str(col).startswith(q_num + '_'):
                                 suffix = str(col).replace(q_num, '')
                                 new_columns[col] = f"{q_text}{suffix}"
@@ -494,65 +447,26 @@ def aggregate_data(data_files, question_master_df, client_settings_df):
                     if row['質問文'] not in text_to_q_map:
                         text_to_q_map[row['質問文']] = row[file_col]
         
-        # 🆕 質問対応表形式のマッピングを作成（質問 + 選択肢を含む）
-        # クライアントの質問リストに該当する質問対応表データを抽出
+        # このクライアント専用のマッピングを作成
+        # クライアントの質問リストから、該当するマッピングのみを抽出
         client_mapping_data = []
 
         for question_text in all_questions:
-            # comprehensive_question_mapping から該当する質問とその選択肢を探す
-            question_found = False
-            for mapping_entry in comprehensive_question_mapping:
-                # 質問のメイン行を探す（番号がQ-で始まり、内容が質問文と一致）
-                if (mapping_entry['番号'].startswith('Q-') and
-                    mapping_entry['内容'] == question_text):
+            # question_masterでこの質問を探す
+            matching_rows = question_master_df[question_master_df['質問文'] == question_text]
+            if not matching_rows.empty:
+                row = matching_rows.iloc[0]
+                # この質問に対して最初に見つかった非NULLのmappingを使用
+                for col in question_master_df.columns:
+                    if col.endswith('.xlsx') and pd.notna(row[col]):
+                        client_mapping_data.append({
+                            '質問文': question_text,
+                            '質問番号': row[col]
+                        })
+                        break
 
-                    # 質問のメイン行を追加
-                    client_mapping_data.append(mapping_entry)
-                    question_found = True
-
-                    # この質問の選択肢も探して追加
-                    question_index = comprehensive_question_mapping.index(mapping_entry)
-
-                    # 質問の直後から次の質問までの選択肢を収集
-                    for i in range(question_index + 1, len(comprehensive_question_mapping)):
-                        choice_entry = comprehensive_question_mapping[i]
-
-                        # 次の質問（Q-で始まる）が見つかったら停止
-                        if choice_entry['番号'].startswith('Q-'):
-                            break
-
-                        # 選択肢（数字の番号で内容がある）を追加
-                        if (choice_entry['番号'].isdigit() and
-                            choice_entry['内容'].strip()):
-                            client_mapping_data.append(choice_entry)
-
-                    break
-
-            # もし質問対応表に見つからない場合は、従来の方法でフォールバック
-            if not question_found:
-                matching_rows = question_master_df[question_master_df['質問文'] == question_text]
-                if not matching_rows.empty:
-                    row = matching_rows.iloc[0]
-                    for col in question_master_df.columns:
-                        if col.endswith('.xlsx') and pd.notna(row[col]):
-                            client_mapping_data.append({
-                                '番号': row[col],
-                                '条件': '',
-                                '内容': question_text,
-                                '区分': ''
-                            })
-                            break
-
-        # DataFrameを作成
-        if client_mapping_data:
-            base_mapping_df = pd.DataFrame(client_mapping_data)
-            # 列の順序を調整
-            base_mapping_df = base_mapping_df[['番号', '条件', '内容', '区分']]
-        else:
-            # フォールバック：空のDataFrame
-            base_mapping_df = pd.DataFrame(columns=['番号', '条件', '内容', '区分'])
-
-        logs.append(f"'{client_name}' のマッピング: {len(base_mapping_df)}行（質問+選択肢を含む）")
+        base_mapping_df = pd.DataFrame(client_mapping_data)
+        logs.append(f"'{client_name}' のマッピング: {len(base_mapping_df)}個の質問")
 
         # client_dataの列名を質問文から質問番号へ再変換（FA列も考慮）
         final_rename_map = {}
