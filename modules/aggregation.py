@@ -59,18 +59,8 @@ def aggregate_data(data_files, question_master_df, client_settings_df):
     for i, f in enumerate(data_files):
         logs.append(f"  {i+1}. {f.name} (サイズ: {f.size} bytes)")
     
-    # 全ファイルから統合マッピングを作成（90個の質問すべてをカバー）
-    global_q_to_text_map = {}
-    for col in question_master_df.columns:
-        if col != '質問文' and col != '初出ファイル' and col.endswith('.xlsx'):
-            temp_mapping = question_master_df[['質問文', col]].dropna()
-            for _, row in temp_mapping.iterrows():
-                # まだマッピングされていない質問のみ追加
-                if row[col] not in global_q_to_text_map:
-                    global_q_to_text_map[row[col]] = row['質問文']
-    
-    logs.append(f"統合マッピングを作成: {len(global_q_to_text_map)}個の質問コードをテキストにマッピング")
     logs.append(f"question_masterから検出された総質問数: {len(question_master_df)}個")
+    logs.append("ファイル固有の質問マッピングを使用します（各ファイルが独自の質問コードマッピングを持つため）")
     
     print(f"🔍 DEBUG: Starting to process {len(data_files)} files")
 
@@ -114,11 +104,26 @@ def aggregate_data(data_files, question_master_df, client_settings_df):
             # 文字化けしたファイル名と修正後のファイル名の両方をチェック
             file_column = None
             q_to_text_map = {}
-            
+
+            # 1. 完全一致をチェック
             if filename in question_master_df.columns:
                 file_column = filename
             elif original_filename in question_master_df.columns:
                 file_column = original_filename
+            # 2. Plus_マージ完成データ.xlsx の特別なケース
+            elif "Plus_マージ完成データ" in filename:
+                for col in question_master_df.columns:
+                    if "Plus2" in col and not col.startswith("[コピー]"):
+                        file_column = col
+                        break
+            # 3. 部分一致での検索（fallback）
+            else:
+                # ファイル名の主要部分を抽出して検索
+                clean_filename = filename.replace(".xlsx", "")
+                for col in question_master_df.columns:
+                    if col.endswith('.xlsx') and clean_filename in col:
+                        file_column = col
+                        break
             
             if file_column:
                 file_mapping = question_master_df[['質問文', file_column]].dropna()
@@ -157,16 +162,16 @@ def aggregate_data(data_files, question_master_df, client_settings_df):
                     logs.append(f"'{filename}' のdataシートは空です。スキップします。")
                     continue
 
-                # グローバルマッピングを使用してすべての列をrename
+                # ファイル固有のマッピングを使用してすべての列をrename
                 new_columns = {}
                 mapped_count = 0
                 for col in df_data.columns:
-                    if col in global_q_to_text_map:
-                        new_columns[col] = global_q_to_text_map[col]
+                    if col in q_to_text_map:
+                        new_columns[col] = q_to_text_map[col]
                         mapped_count += 1
                     else:
                         # サフィックス付きの列をチェック（例: Q-001_1, Q-001_2など）
-                        for q_num, q_text in global_q_to_text_map.items():
+                        for q_num, q_text in q_to_text_map.items():
                             if str(col).startswith(q_num + '_'):
                                 suffix = str(col).replace(q_num, '')
                                 new_columns[col] = f"{q_text}{suffix}"
