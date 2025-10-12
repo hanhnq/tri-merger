@@ -84,3 +84,13 @@ final_debug_instructions.md
 AGGREGATION_IMPROVEMENTS.md
 作業計画.md
 AGENTS.md
+# Test files
+compare_files_75_76.py
+test_q011_fix.py
+debug_q011_structure.py
+debug_before_call.txt
+debug_log.txt
+trigger_reindex_error_instructions.md
+
+# Debug files with backslash paths
+D:\python	ri-merger\debug_log.txt
