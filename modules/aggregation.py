@@ -342,10 +342,34 @@ def aggregate_data(data_files, question_master_df, client_settings_df):
                 final_rename_map[col_name] = text_to_q_map[col_name]
 
         output_client_data = client_data.rename(columns=final_rename_map)
-        
+
+        # 基準ファイルを特定（文字化け対策済みのファイル名を使用）
+        file_list = []
+        for f in data_files:
+            if f.name.endswith('.xlsx') and not f.name.startswith('~'):
+                # 同じ文字化け対策処理を適用
+                fname = f.name
+                try:
+                    if any(ord(c) > 127 and ord(c) < 256 for c in fname):
+                        try:
+                            fname = fname.encode('latin-1').decode('utf-8')
+                        except:
+                            pass
+                    if '�' in fname or any(ord(c) > 0xFFFF for c in fname):
+                        import hashlib
+                        file_hash = hashlib.md5(f.name.encode('utf-8', errors='ignore')).hexdigest()[:8]
+                        fname = f"file_{file_hash}.xlsx"
+                except:
+                    import time
+                    fname = f"file_{int(time.time())}.xlsx"
+                file_list.append(fname)
+
+        file_list = sorted(file_list)
+        base_file = file_list[0] if file_list else f"{client_name}専用マッピング"
+
         client_results[client_name] = {
             'data': output_client_data,
-            'base_file': f"{client_name}専用マッピング",
+            'base_file': base_file,
             'mapping': base_mapping_df
         }
         
