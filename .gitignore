@@ -93,4 +93,8 @@ debug_log.txt
 trigger_reindex_error_instructions.md
 
 # Debug files with backslash paths
-D:\python	ri-merger\debug_log.txt
+D:\python\tri-merger\debug_log.txt
+
+# Local development folders
+.devcontainer/
+.serena/
