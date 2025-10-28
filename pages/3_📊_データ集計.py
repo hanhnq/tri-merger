@@ -122,8 +122,11 @@ if st.session_state.aggregation_results:
             workbook = writer.book
             worksheet = writer.sheets['全結合データ']
 
-            # Create format with Calibri font
-            calibri_format = workbook.add_format({'font_name': 'Calibri'})
+            # Create format with Calibri font - force Western charset to prevent Japanese override
+            calibri_format = workbook.add_format({
+                'font_name': 'Calibri',
+                'font_charset': 0  # ANSI_CHARSET - force Western font rendering
+            })
 
             # Apply font to all rows
             for row in range(len(st.session_state.merged_df) + 1):  # +1 for header
@@ -191,9 +194,12 @@ if st.session_state.aggregation_results:
                         mapping_df = mapping_df[['質問番号', '質問文']]
                     mapping_df.to_excel(writer, sheet_name='基準質問マッピング', index=False)
 
-            # Set Calibri font for all sheets
+            # Set Calibri font for all sheets - force Western charset
             workbook = writer.book
-            calibri_format = workbook.add_format({'font_name': 'Calibri'})
+            calibri_format = workbook.add_format({
+                'font_name': 'Calibri',
+                'font_charset': 0  # ANSI_CHARSET - force Western font rendering
+            })
 
             # Apply font to all sheets
             for sheet_name, worksheet in writer.sheets.items():
@@ -208,6 +214,7 @@ if st.session_state.aggregation_results:
                         # 基準質問マッピング専用のフォーマット設定
                         header_format = workbook.add_format({
                             'font_name': 'Calibri',
+                            'font_charset': 0,
                             'bold': True,
                             'border': 1,
                             'bg_color': '#F2F2F2'
@@ -215,6 +222,7 @@ if st.session_state.aggregation_results:
 
                         question_format = workbook.add_format({
                             'font_name': 'Calibri',
+                            'font_charset': 0,
                             'bold': True,
                             'border': 1,
                             'bg_color': '#E6F3FF'
@@ -222,11 +230,13 @@ if st.session_state.aggregation_results:
 
                         choice_format = workbook.add_format({
                             'font_name': 'Calibri',
+                            'font_charset': 0,
                             'border': 1
                         })
 
                         empty_format = workbook.add_format({
-                            'font_name': 'Calibri'
+                            'font_name': 'Calibri',
+                            'font_charset': 0
                         })
 
                         # ヘッダー行にフォーマット適用
