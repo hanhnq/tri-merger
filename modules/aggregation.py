@@ -367,6 +367,69 @@ def aggregate_data(data_files, question_master_df, client_settings_df):
         file_list = sorted(file_list)
         base_file = file_list[0] if file_list else f"{client_name}専用マッピング"
 
+        # 🆕 質問番号を連番に再採番（Q-001, Q-002, Q-003...）
+        # mappingから質問のメイン行（Q-で始まる）を抽出して再採番
+        if not base_mapping_df.empty:
+            renumbered_mapping_rows = []
+            old_to_new_q_map = {}  # 旧番号 -> 新番号のマッピング
+            new_q_counter = 1
+            
+            for idx, row in base_mapping_df.iterrows():
+                q_num = str(row['番号'])
+                
+                if q_num.startswith('Q-'):
+                    # 質問のメイン行：新しい番号を割り当てる
+                    new_q_num = f"Q-{new_q_counter:03d}"
+                    old_to_new_q_map[q_num] = new_q_num
+                    
+                    renumbered_mapping_rows.append({
+                        '番号': new_q_num,
+                        '条件': row['条件'],
+                        '内容': row['内容'],
+                        '区分': row['区分']
+                    })
+                    new_q_counter += 1
+                elif q_num.isdigit():
+                    # 選択肢行：番号はそのまま保持
+                    renumbered_mapping_rows.append({
+                        '番号': q_num,
+                        '条件': row['条件'],
+                        '内容': row['内容'],
+                        '区分': row['区分']
+                    })
+                else:
+                    # その他の行：そのまま保持
+                    renumbered_mapping_rows.append({
+                        '番号': q_num,
+                        '条件': row['条件'],
+                        '内容': row['内容'],
+                        '区分': row['区分']
+                    })
+            
+            # 再採番されたマッピングで置き換え
+            base_mapping_df = pd.DataFrame(renumbered_mapping_rows)
+            
+            # output_client_dataの列名も再採番
+            if old_to_new_q_map:
+                column_rename_map = {}
+                for col in output_client_data.columns:
+                    col_str = str(col)
+                    # Q-xxx形式の列名をチェック
+                    for old_q, new_q in old_to_new_q_map.items():
+                        if col_str == old_q:
+                            # 完全一致の場合
+                            column_rename_map[col] = new_q
+                            break
+                        elif col_str.startswith(old_q + '_'):
+                            # サフィックス付きの場合（例: Q-001_FA）
+                            suffix = col_str[len(old_q):]
+                            column_rename_map[col] = new_q + suffix
+                            break
+                
+                if column_rename_map:
+                    output_client_data = output_client_data.rename(columns=column_rename_map)
+                    logs.append(f"'{client_name}' の質問番号を連番に再採番しました。({len(old_to_new_q_map)}個)")
+
         client_results[client_name] = {
             'data': output_client_data,
             'base_file': base_file,
